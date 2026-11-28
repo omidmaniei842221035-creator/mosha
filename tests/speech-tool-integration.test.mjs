@@ -23,15 +23,23 @@ test('maps delivery profiles to distinct local speed, pitch, and pause controls'
   assert.ok(conversational.pitchRange - formal.pitchRange >= 0.45);
   assert.equal(deliveryCore.resolveLocalSpeechDelivery('unknown', options).style, 'auto');
   assert.equal(deliveryCore.resolveLocalSpeechDelivery('auto', options).autoTextProsody, true);
-  assert.equal(formal.autoTextProsody, false);
+  assert.equal(formal.autoTextProsody, true, 'text-aware delivery remains active over an explicit style preset');
   assert.match(tool, /speechDeliverySettings\(speechCore\)/u);
   assert.match(worker, /settings\.autoTextProsody !== false/u);
+  assert.doesNotMatch(worker, /settings\.style\s*===\s*'auto'/u, 'manual style presets do not disable sentence-aware output');
   assert.match(tool, /startTinyAvaSpeech\(text, session, selected, delivery\)/u);
-  assert.match(tool, /startPiperSpeech\(text, session, selected, delivery\)/u);
-  assert.match(tool, /startBundledSpeech\(text, session, delivery\)/u);
-  assert.match(tool, /utterance\.rate = delivery\.speed/u);
-  assert.match(tool, /utterance\.pitch = delivery\.pitch/u);
-  assert.match(piperWorker, /pauseAfterPiperChunk\(chunk\) \* safePauseScale/u);
+  assert.match(tool, /startPiperSpeech\(text, session, selected, delivery, speechCore\)/u);
+  assert.match(tool, /startBundledSpeech\(text, session, delivery, speechCore\)/u);
+  assert.match(tool, /utterance\.rate = Math\.max\([\s\S]*?prosody\.speedScale/u);
+  assert.match(tool, /utterance\.pitch = Math\.max\([\s\S]*?prosody\.pitchShiftOffset/u);
+  assert.match(tool, /utterance\.volume = Math\.max\([\s\S]*?prosody\.intensityScale/u);
+  assert.match(tool, /segmentPersianDeliveryText\(text, limit\)/u);
+  assert.match(tool, /analyzePersianDeliverySequence\(chunks\)/u);
+  assert.match(tool, /stripSpeechMarkupTags\(withoutCues\)/u);
+  assert.match(core, /export function stripSpeechMarkupTags/u);
+  assert.match(piperWorker, /chunk\.speedScale/u);
+  assert.match(piperWorker, /chunk\.intensityScale/u);
+  assert.match(piperWorker, /chunk\.pauseScale/u);
 });
 
 test('keeps intra-sentence punctuation inside a single tiny-ava model segment', () => {
@@ -71,10 +79,17 @@ test('prefers the local neural Persian voice unless an explicit voice choice was
   assert.match(tool, /دریافت کنید/u);
 });
 
-test('uses punctuation-sensitive pauses for Piper and advances the offline shell cache', () => {
-  assert.match(piperWorker, /pauseAfterPiperChunk/u);
-  assert.match(piperWorker, /cleanChunks\.slice\(0, -1\)\.map\(chunk => Math\.min\(2600, Math\.round\(pauseAfterPiperChunk\(chunk\) \* safePauseScale\)\)\)/u);
-  assert.match(serviceWorker, /shahr-advisor-pc-v45/u);
+test('uses contextual, punctuation-sensitive pauses on Piper and sentence-level controls on eSpeak', async () => {
+  const espeakWorker = await readFile(new URL('../speech-vendor/espeak-worker.mjs', import.meta.url), 'utf8');
+  const espeakCore = await readFile(new URL('../speech-vendor/espeak-core.mjs', import.meta.url), 'utf8');
+  assert.match(piperWorker, /pauseAfterPiperChunk\(chunk\.text\)/u);
+  assert.match(piperWorker, /chunk\.pauseAfterMs > 0/u);
+  assert.match(espeakWorker, /synthesizePersianSegmentsWav/u);
+  assert.match(espeakCore, /segment\.speedScale/u);
+  assert.match(espeakCore, /segment\.pitchShiftOffset/u);
+  assert.match(espeakCore, /segment\.intensityScale/u);
+  assert.match(espeakCore, /pauseAfterPiperChunk\(segment\.text\)/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v46/u);
   for (const path of ['speech-tool.js', 'speech-vendor/tiny-ava/core.mjs', 'speech-vendor/piper/piper-worker.mjs', 'speech-vendor/piper/core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline shell`);
   }

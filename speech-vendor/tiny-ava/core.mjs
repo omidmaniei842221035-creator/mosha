@@ -65,7 +65,7 @@ export function resolveLocalSpeechDelivery(style = 'auto', {
     pitch: clamp(Math.exp(pitchShift), 0.8, 1.2, 1),
     pitchRange: clamp(preset.pitchRange * expression, 0.7, 1.4, 1.05),
     pauseScale: clamp(preset.pauseScale * clamp(pauseScale, 0.6, 1.8, 1), 0.6, 1.8, 1),
-    autoTextProsody: styleName === 'auto'
+    autoTextProsody: true
   });
 }
 
@@ -198,6 +198,29 @@ export function expandPersianNumbers(value) {
   return text;
 }
 
+const TINY_AVA_SPEECH_MARKUP_NAMES = new Set([
+  'speak', 'voice', 'prosody', 'break', 'emphasis', 'phoneme', 'say-as', 'sub', 'lang',
+  'p', 's', 'mark', 'audio', 'desc', 'lexicon', 'metadata', 'emotion', 'tone', 'style',
+  'speed', 'rate', 'pitch', 'volume', 'pause', 'breath', 'stretch', 'amazon:effect',
+  'amazon:emotion', 'mstts:express-as'
+]);
+
+/** Remove speech/SSML tags without mistaking ordinary comparisons such as `x < y` for markup. */
+export function stripSpeechMarkupTags(value) {
+  const source = String(value || '');
+  const stripped = source.replace(/<\/?([\p{L}][\p{L}\p{N}_.:-]*)(?:\s+[^<>]*)?\s*\/?>/gu, (tag, rawName) => {
+    const name = String(rawName || '').toLocaleLowerCase();
+    const hasAttributes = /\s+[^<>]*=/u.test(tag);
+    const isSelfClosing = /\/\s*>$/u.test(tag);
+    if (TINY_AVA_SPEECH_MARKUP_NAMES.has(name) || name.length > 1 || hasAttributes || isSelfClosing || /^<\//u.test(tag)) return ' ';
+    return tag;
+  });
+  return stripped.replace(/<\/?([\p{L}][\p{L}\p{N}_.:-]*)(?:\s+[^<>]*)?$/gu, (tag, rawName) => {
+    const name = String(rawName || '').toLocaleLowerCase();
+    return TINY_AVA_SPEECH_MARKUP_NAMES.has(name) || name.length > 1 ? ' ' : tag;
+  });
+}
+
 export function normalizeTinyAvaText(value) {
   let text = String(value || '').normalize('NFC');
   let mapped = '';
@@ -269,12 +292,51 @@ const TINY_AVA_PRIORITY_WORDS = new Set([
   'مبلغ', 'هزینه', 'تاریخ', 'ساعت', 'شماره', 'تأیید', 'سررسید', 'تومان', 'ریال', 'درصد', 'دلار', 'یورو', 'به‌ویژه', 'اصل', 'اصلی'
 ].map(normalizeProsodyWord));
 const TINY_AVA_NAME_TITLES = new Set(['آقای', 'خانم', 'جناب', 'سرکار', 'دکتر', 'مهندس', 'استاد', 'پروفسور'].map(normalizeProsodyWord));
-const TINY_AVA_EMPATHY_WORDS = new Set(['متأسفم', 'متاسفم', 'تسلیت', 'نگران', 'دشواری', 'سختی', 'همدردی', 'درکتان', 'می‌فهمم', 'کنارتان'].map(normalizeProsodyWord));
-const TINY_AVA_WARM_WORDS = new Set(['ممنون', 'ممنونم', 'ممنونید', 'متشکرم', 'متشکریم', 'سپاس', 'سپاسگزارم', 'مرسی', 'تبریک', 'آفرین', 'خوشحال', 'خوشحالم', 'خوشحالیم', 'مبارک'].map(normalizeProsodyWord));
+const TINY_AVA_EMPATHY_WORDS = new Set(['متأسفم', 'متاسفم', 'تسلیت', 'دشواری', 'سختی', 'همدردی', 'درکتان', 'می‌فهمم', 'کنارتان'].map(normalizeProsodyWord));
+const TINY_AVA_WARM_WORDS = new Set(['ممنون', 'ممنونم', 'ممنونید', 'متشکرم', 'متشکریم', 'سپاس', 'سپاسگزارم', 'مرسی', 'خوشحال', 'خوشحالم', 'خوشحالیم', 'خوش‌آمدید'].map(normalizeProsodyWord));
 const TINY_AVA_FORMAL_WORDS = new Set(['لطفاً', 'لطفا', 'خواهشمندم', 'خواهشمند', 'احتراماً', 'احتراما', 'جناب', 'سرکار', 'بدین‌وسیله', 'استحضار', 'رسماً', 'رسمی'].map(normalizeProsodyWord));
-const TINY_AVA_SURPRISE_WORDS = new Set(['عجب', 'واقعاً', 'واقعا', 'حیرت', 'باورنکردنی'].map(normalizeProsodyWord));
-const TINY_AVA_ASSERTIVE_WORDS = new Set(['مهم', 'توجه', 'ضروری', 'حتماً', 'حتما', 'باید', 'توصیه', 'پیشنهاد', 'نتیجه', 'نکته'].map(normalizeProsodyWord));
-const TINY_AVA_CONVERSATIONAL_WORDS = new Set(['سلام', 'خب', 'باشه', 'راستش', 'دوست', 'عزیز'].map(normalizeProsodyWord));
+const TINY_AVA_SURPRISE_WORDS = new Set(['عجب', 'حیرت', 'باورنکردنی', 'شگفت‌انگیز'].map(normalizeProsodyWord));
+const TINY_AVA_ENTHUSIASM_WORDS = new Set(['تبریک', 'آفرین', 'مبارک', 'عالی', 'فوق‌العاده', 'موفقیت', 'درخشان'].map(normalizeProsodyWord));
+const TINY_AVA_CONCERN_WORDS = new Set(['نگران', 'نگرانی', 'متأسفانه', 'متاسفانه', 'مشکل', 'خطر', 'فوری', 'بحران', 'آسیب', 'ضرر'].map(normalizeProsodyWord));
+const TINY_AVA_ASSERTIVE_WORDS = new Set(['مهم', 'توجه', 'ضروری', 'حتماً', 'حتما', 'باید', 'اکیداً', 'اکیدا', 'الزامی', 'قطعاً', 'قطعا', 'تأکید'].map(normalizeProsodyWord));
+const TINY_AVA_PERSUASIVE_WORDS = new Set(['پیشنهاد', 'توصیه', 'مناسب', 'مزیت', 'فایده', 'انتخاب'].map(normalizeProsodyWord));
+const TINY_AVA_THOUGHTFUL_WORDS = new Set(['شاید', 'احتمالاً', 'احتمالا', 'بررسی', 'بیایید', 'اجازه', 'به‌نظر', 'فکر'].map(normalizeProsodyWord));
+const TINY_AVA_SERIOUS_WORDS = new Set(['نتیجه', 'جمع‌بندی', 'مسئولیت', 'قانون', 'قطعی', 'رسیدگی', 'اصل'].map(normalizeProsodyWord));
+const TINY_AVA_CONVERSATIONAL_WORDS = new Set(['سلام', 'خب', 'باشه', 'راستش', 'خوش‌آمدید'].map(normalizeProsodyWord));
+const TINY_AVA_REASSURANCE_PHRASES = Object.freeze([
+  'نگران نباشید', 'نگران نباش', 'جای نگرانی نیست', 'خاطرتان جمع', 'با خیال راحت',
+  'اطمینان می‌دهم', 'کنارتان هستیم', 'حتماً پیگیری می‌کنم'
+]);
+const TINY_AVA_EMPATHY_PHRASES = Object.freeze([
+  'تسلیت می‌گویم', 'با شما همدردی می‌کنم', 'درکتان می‌کنم', 'درکت می‌کنم',
+  'می‌فهمم چه قدر سخت', 'می‌دانم شرایط سختی', 'کنارتان هستم'
+]);
+const TINY_AVA_WARM_PHRASES = Object.freeze(['دوست عزیز', 'کاربر عزیز', 'ممنون از شما', 'روز خوبی داشته باشید', 'خوشحال می‌شوم']);
+const TINY_AVA_NEGATED_POSITIVE_PHRASES = Object.freeze([
+  'خبر خوبی نیست', 'خبر خوبی نبود', 'موفق نشدیم', 'خوشحال نیستم', 'خوشحال نیستیم', 'خوشحال نبودم',
+  'عالی نیست', 'فوق‌العاده نیست', 'باورنکردنی نیست'
+]);
+const TINY_AVA_PERSUASIVE_PHRASES = Object.freeze(['پیشنهاد می‌کنم', 'بهتر است', 'اگر مایلید', 'می‌تواند کمک کند']);
+const TINY_AVA_THOUGHTFUL_PHRASES = Object.freeze(['اجازه بدهید بررسی کنم', 'بیایید بررسی کنیم', 'به نظر می‌رسد', 'فکر می‌کنم']);
+const TINY_AVA_SURPRISE_PHRASES = Object.freeze(['چه جالب', 'چه عالی', 'باورکردنی نیست']);
+const TINY_AVA_ENTHUSIASM_PHRASES = Object.freeze(['چه خبر خوبی', 'خبر خوبی', 'تبریک می‌گویم', 'تبریک می‌گم', 'موفق شدیم']);
+const TINY_AVA_TONE_PROFILES = Object.freeze({
+  neutral: Object.freeze({ speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1, intensityScale: 1, pauseScale: 1 }),
+  empathetic: Object.freeze({ speedScale: 0.955, pitchShiftOffset: -0.014, pitchRangeScale: 0.94, intensityScale: 0.97, pauseScale: 1.12 }),
+  reassuring: Object.freeze({ speedScale: 0.975, pitchShiftOffset: 0.002, pitchRangeScale: 1, intensityScale: 1, pauseScale: 1.1 }),
+  formal: Object.freeze({ speedScale: 0.98, pitchShiftOffset: -0.006, pitchRangeScale: 0.95, intensityScale: 0.99, pauseScale: 1.08 }),
+  surprised: Object.freeze({ speedScale: 1.005, pitchShiftOffset: 0.011, pitchRangeScale: 1.07, intensityScale: 1.015, pauseScale: 1 }),
+  enthusiastic: Object.freeze({ speedScale: 1.02, pitchShiftOffset: 0.016, pitchRangeScale: 1.1, intensityScale: 1.025, pauseScale: 0.96 }),
+  serious: Object.freeze({ speedScale: 0.96, pitchShiftOffset: -0.012, pitchRangeScale: 0.94, intensityScale: 0.98, pauseScale: 1.12 }),
+  assertive: Object.freeze({ speedScale: 0.98, pitchShiftOffset: 0.004, pitchRangeScale: 1.04, intensityScale: 1.015, pauseScale: 1.04 }),
+  persuasive: Object.freeze({ speedScale: 0.99, pitchShiftOffset: 0.003, pitchRangeScale: 1.03, intensityScale: 1, pauseScale: 1.04 }),
+  thoughtful: Object.freeze({ speedScale: 0.96, pitchShiftOffset: -0.006, pitchRangeScale: 0.96, intensityScale: 0.985, pauseScale: 1.1 }),
+  warm: Object.freeze({ speedScale: 1.005, pitchShiftOffset: 0.006, pitchRangeScale: 1.045, intensityScale: 1.015, pauseScale: 1 }),
+  conversational: Object.freeze({ speedScale: 1.01, pitchShiftOffset: 0.004, pitchRangeScale: 1.035, intensityScale: 1.005, pauseScale: 0.98 })
+});
+const TINY_AVA_DELIVERY_PROSODY_KEYS = Object.freeze([
+  'speedScale', 'pitchShiftOffset', 'pitchRangeScale', 'intensityScale', 'pauseScale'
+]);
 
 /** Find conservative word/phrase emphasis targets from text only; never classifies a speaker's emotional state. */
 function tinyAvaEmphasisWordIndexes(value, manualPhrases = []) {
@@ -305,29 +367,178 @@ function tinyAvaEmphasisWordIndexes(value, manualPhrases = []) {
 }
 
 function contextualTinyAvaProsody(text) {
-  const words = prosodyWordTokens(text);
-  const keys = words.map(token => token.key);
-  const hasAny = set => keys.some(key => set.has(key));
+  const words = prosodyWordTokens(normalizeTinyAvaText(text));
+  const hasAny = set => words.some(token => set.has(token.key));
   const hasPhrase = phrase => containsProsodyWordSequence(words, phrase);
-  if (hasAny(TINY_AVA_EMPATHY_WORDS) || hasPhrase('درکتان می‌کنم') || hasPhrase('می‌فهمم چه')) {
-    return { speedScale: 0.97, pitchShiftOffset: -0.01, pitchRangeScale: 0.95 };
+  const endsWithExclamation = /!+[^\p{L}\p{N}]*$/u.test(String(text || '').trim());
+  const negatedPositive = TINY_AVA_NEGATED_POSITIVE_PHRASES.some(hasPhrase);
+  const warmCue = !negatedPositive && (hasAny(TINY_AVA_WARM_WORDS) || TINY_AVA_WARM_PHRASES.some(hasPhrase));
+  const enthusiasticCue = !negatedPositive && (
+    TINY_AVA_ENTHUSIASM_PHRASES.some(hasPhrase) ||
+    (hasAny(TINY_AVA_ENTHUSIASM_WORDS) && (endsWithExclamation || warmCue))
+  );
+
+  let tone = 'neutral';
+  let confidence = 0;
+  if (TINY_AVA_REASSURANCE_PHRASES.some(hasPhrase)) {
+    tone = 'reassuring'; confidence = 0.9;
+  } else if (hasAny(TINY_AVA_EMPATHY_WORDS) || TINY_AVA_EMPATHY_PHRASES.some(hasPhrase)) {
+    tone = 'empathetic'; confidence = 0.86;
+  } else if (hasAny(TINY_AVA_FORMAL_WORDS) || hasPhrase('با سلام') || hasPhrase('با احترام')) {
+    tone = 'formal'; confidence = 0.72;
+  } else if (hasAny(TINY_AVA_CONCERN_WORDS) || hasAny(TINY_AVA_SERIOUS_WORDS)) {
+    tone = 'serious'; confidence = 0.64;
+  } else if (hasAny(TINY_AVA_ASSERTIVE_WORDS)) {
+    tone = 'assertive'; confidence = 0.72;
+  } else if (TINY_AVA_PERSUASIVE_PHRASES.some(hasPhrase) || hasAny(TINY_AVA_PERSUASIVE_WORDS)) {
+    tone = 'persuasive'; confidence = 0.68;
+  } else if (TINY_AVA_THOUGHTFUL_PHRASES.some(hasPhrase) || hasAny(TINY_AVA_THOUGHTFUL_WORDS)) {
+    tone = 'thoughtful'; confidence = 0.66;
+  } else if (!negatedPositive && (TINY_AVA_SURPRISE_PHRASES.some(hasPhrase) || hasAny(TINY_AVA_SURPRISE_WORDS))) {
+    tone = 'surprised'; confidence = 0.7;
+  } else if (enthusiasticCue) {
+    tone = 'enthusiastic'; confidence = 0.75;
+  } else if (warmCue) {
+    tone = 'warm'; confidence = 0.66;
+  } else if (hasAny(TINY_AVA_CONVERSATIONAL_WORDS)) {
+    tone = 'conversational'; confidence = 0.55;
   }
-  if (hasAny(TINY_AVA_FORMAL_WORDS) || hasPhrase('با سلام') || hasPhrase('با احترام')) {
-    return { speedScale: 0.985, pitchShiftOffset: -0.003, pitchRangeScale: 0.96 };
+  return { tone, confidence, ...TINY_AVA_TONE_PROFILES[tone] };
+}
+
+function tinyAvaTerminalProsody(text) {
+  const value = String(text || '').trimEnd();
+  const last = Array.from(value).reverse().find(character => !TINY_AVA_CLOSING_PUNCTUATION.has(character)) || '';
+  if (last === '?' || last === '؟') return { speedScale: 0.985, pitchShiftOffset: 0.018, pitchRangeScale: 1.08, intensityScale: 1, pauseScale: 1.04 };
+  if (last === '!') return { speedScale: 1.015, pitchShiftOffset: 0.016, pitchRangeScale: 1.08, intensityScale: 1.015, pauseScale: 0.98 };
+  if (last === '…') return { speedScale: 0.94, pitchShiftOffset: -0.014, pitchRangeScale: 0.95, intensityScale: 0.985, pauseScale: 1.1 };
+  if (last === '.' || last === '؛' || last === ';') return { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1, intensityScale: 1, pauseScale: 1 };
+  return { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1, intensityScale: 1, pauseScale: 1 };
+}
+
+function tinyAvaSentenceLengthProsody(text) {
+  const wordCount = prosodyWordTokens(normalizeTinyAvaText(text)).length;
+  if (wordCount >= 24) return { speedScale: 0.98, pitchRangeScale: 0.98, pauseScale: 1.04 };
+  if (wordCount > 0 && wordCount <= 4) return { speedScale: 1.01, pitchRangeScale: 1, pauseScale: 0.99 };
+  return { speedScale: 1, pitchRangeScale: 1, pauseScale: 1 };
+}
+
+/** Small, text-only Persian sentence analysis. It never edits or returns replacement speech text. */
+export function analyzePersianDeliveryProsody(value, { includeContext = true } = {}) {
+  const context = includeContext
+    ? contextualTinyAvaProsody(value)
+    : { tone: 'neutral', confidence: 0, ...TINY_AVA_TONE_PROFILES.neutral };
+  const strength = Math.max(0, Math.min(1, Number(context.confidence) || 0));
+  const contextual = {
+    speedScale: 1 + (context.speedScale - 1) * strength,
+    pitchShiftOffset: context.pitchShiftOffset * strength,
+    pitchRangeScale: 1 + (context.pitchRangeScale - 1) * strength,
+    intensityScale: 1 + (context.intensityScale - 1) * strength,
+    pauseScale: 1 + (context.pauseScale - 1) * strength
+  };
+  const terminal = tinyAvaTerminalProsody(value);
+  const length = tinyAvaSentenceLengthProsody(value);
+  return {
+    tone: context.tone,
+    confidence: context.confidence,
+    speedScale: contextual.speedScale * terminal.speedScale * length.speedScale,
+    pitchShiftOffset: contextual.pitchShiftOffset + terminal.pitchShiftOffset,
+    pitchRangeScale: contextual.pitchRangeScale * terminal.pitchRangeScale * length.pitchRangeScale,
+    intensityScale: contextual.intensityScale * terminal.intensityScale,
+    pauseScale: contextual.pauseScale * terminal.pauseScale * length.pauseScale
+  };
+}
+
+function smoothDeliveryProsody(current, previous) {
+  if (!previous) return current;
+  const targetWeight = current.tone === previous.tone ? 0.94 : current.tone === 'neutral' ? 0.82 : 0.86;
+  const blended = { ...current };
+  for (const key of TINY_AVA_DELIVERY_PROSODY_KEYS) {
+    blended[key] = previous[key] * (1 - targetWeight) + current[key] * targetWeight;
   }
-  if (hasAny(TINY_AVA_SURPRISE_WORDS) || hasPhrase('چه جالب') || hasPhrase('چه عالی')) {
-    return { speedScale: 1.005, pitchShiftOffset: 0.008, pitchRangeScale: 1.05 };
-  }
-  if (hasAny(TINY_AVA_WARM_WORDS)) {
-    return { speedScale: 1.005, pitchShiftOffset: 0.006, pitchRangeScale: 1.04 };
-  }
-  if (hasAny(TINY_AVA_ASSERTIVE_WORDS) || hasPhrase('پیشنهاد می‌کنم') || hasPhrase('بهتر است')) {
-    return { speedScale: 0.99, pitchShiftOffset: 0.004, pitchRangeScale: 1.03 };
-  }
-  if (hasAny(TINY_AVA_CONVERSATIONAL_WORDS)) {
-    return { speedScale: 1.005, pitchShiftOffset: 0.003, pitchRangeScale: 1.02 };
-  }
-  return { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+  return blended;
+}
+
+/** Apply mild release/onset smoothing between sentence-level cues; strong words remain intact. */
+export function analyzePersianDeliverySequence(sentences) {
+  let previous = null;
+  return Array.from(sentences || [], rawValue => {
+    const item = rawValue && typeof rawValue === 'object' ? rawValue : null;
+    if (item && item.paragraphBreakBefore) previous = null;
+    const text = item ? item.text : rawValue;
+    const current = analyzePersianDeliveryProsody(text);
+    const smoothed = smoothDeliveryProsody(current, previous);
+    previous = smoothed;
+    return smoothed;
+  });
+}
+
+/** Split unchanged source text for engines that need one inference call per sentence. */
+export function segmentPersianDeliveryText(value, maxChars = 260) {
+  const limit = Math.max(48, Math.min(8000, Math.trunc(Number(maxChars) || 260)));
+  const source = String(value || '').replace(/\r\n?/gu, '\n').trim();
+  if (!source) return [];
+  const paragraphs = source.split(/\n[ \t]*\n+/u);
+  const chunks = [];
+  const terminal = new Set(['.', '!', '?', '؟', '…', '؛', ';']);
+  const closing = new Set(['"', "'", ')', ']', '}', '»', '”', '’']);
+
+  const appendBounded = (value, pauseAfterMs = 0) => {
+    const sentence = String(value || '').trim();
+    if (!sentence) return;
+    const words = sentence.match(/\S+/gu) || [];
+    let fragment = '';
+    const flush = pause => {
+      if (!fragment) return;
+      chunks.push({ text: fragment, pauseAfterMs: Math.max(0, Math.min(2600, Math.round(Number(pause) || 0))) });
+      fragment = '';
+    };
+    for (const word of words) {
+      if (fragment && `${fragment} ${word}`.length > limit) flush(30);
+      if (!fragment && word.length > limit) {
+        const characters = Array.from(word);
+        for (let offset = 0; offset < characters.length; offset += limit) {
+          const part = characters.slice(offset, offset + limit).join('');
+          const finalPart = offset + limit >= characters.length;
+          chunks.push({ text: part, pauseAfterMs: finalPart ? Math.max(0, Math.min(2600, Math.round(Number(pauseAfterMs) || 0))) : 30 });
+        }
+        continue;
+      }
+      fragment = fragment ? `${fragment} ${word}` : word;
+    }
+    if (fragment) flush(pauseAfterMs);
+  };
+
+  let pendingParagraphBoundary = false;
+  paragraphs.forEach((paragraph, paragraphIndex) => {
+    const firstChunkIndex = chunks.length;
+    paragraph.split('\n').forEach(line => {
+      let start = 0;
+      for (let index = 0; index < line.length; index++) {
+        if (!terminal.has(line[index])) continue;
+        let end = index + 1;
+        while (end < line.length && terminal.has(line[end])) end++;
+        while (end < line.length && closing.has(line[end])) end++;
+        if (end < line.length && !/\s/u.test(line[end])) continue;
+        appendBounded(line.slice(start, end));
+        while (end < line.length && /\s/u.test(line[end])) end++;
+        start = end;
+        index = start - 1;
+      }
+      appendBounded(line.slice(start));
+    });
+    if (chunks.length > firstChunkIndex) {
+      if (pendingParagraphBoundary) chunks[firstChunkIndex].paragraphBreakBefore = true;
+      pendingParagraphBoundary = paragraphIndex < paragraphs.length - 1;
+      if (pendingParagraphBoundary) {
+        const last = chunks[chunks.length - 1];
+        last.pauseAfterMs = Math.max(last.pauseAfterMs, 610);
+      }
+    } else if (paragraphIndex < paragraphs.length - 1) {
+      pendingParagraphBoundary = true;
+    }
+  });
+  return chunks;
 }
 
 /** Parse local, user-edited `word = preferred pronunciation` entries. This is a pronunciation dictionary, not model fine-tuning. */
@@ -384,24 +595,18 @@ const TINY_AVA_PAUSE_AFTER_SENTENCE = Object.freeze({
 });
 const TINY_AVA_CLOSING_PUNCTUATION = new Set(['"', "'", ')', ']', '}', '»', '”', '’']);
 
-function tinyAvaSentenceProsody(text, baseOptions = {}, autoTextProsody = true) {
-  const value = String(text || '').trimEnd();
-  const last = Array.from(value).reverse().find(character => !TINY_AVA_CLOSING_PUNCTUATION.has(character)) || '';
-  const terminal = last === '?' || last === '؟'
-    ? { speedScale: 0.985, pitchShiftOffset: 0.018, pitchRangeScale: 1.08 }
-    : last === '!'
-      ? { speedScale: 1.025, pitchShiftOffset: 0.025, pitchRangeScale: 1.12 }
-      : last === '…'
-        ? { speedScale: 0.94, pitchShiftOffset: -0.018, pitchRangeScale: 0.94 }
-        : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
-  const context = autoTextProsody
-    ? contextualTinyAvaProsody(value)
-    : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+function tinyAvaSentenceProsody(text, baseOptions = {}, autoTextProsody = true, previousProsody = null) {
+  const rawProsody = analyzePersianDeliveryProsody(text, { includeContext: autoTextProsody });
+  const prosody = autoTextProsody ? smoothDeliveryProsody(rawProsody, previousProsody) : rawProsody;
   return {
     ...baseOptions,
-    speedScale: (Number(baseOptions.speedScale) || 1) * terminal.speedScale * context.speedScale,
-    pitchShiftOffset: (Number(baseOptions.pitchShiftOffset) || 0) + terminal.pitchShiftOffset + context.pitchShiftOffset,
-    pitchRangeScale: (Number(baseOptions.pitchRangeScale) || 1) * terminal.pitchRangeScale * context.pitchRangeScale
+    speedScale: (Number(baseOptions.speedScale) || 1) * prosody.speedScale,
+    pitchShiftOffset: (Number(baseOptions.pitchShiftOffset) || 0) + prosody.pitchShiftOffset,
+    pitchRangeScale: (Number(baseOptions.pitchRangeScale) || 1) * prosody.pitchRangeScale,
+    intensityScale: (Number(baseOptions.intensityScale) || 1) * prosody.intensityScale,
+    pauseScale: (Number(baseOptions.pauseScale) || 1) * prosody.pauseScale,
+    tone: prosody.tone,
+    _deliveryProsody: prosody
   };
 }
 
@@ -414,6 +619,9 @@ function tinyAvaSegment(text, pauseAfterMs, options) {
     speedScale: Number(options.speedScale) || 1,
     pitchShiftOffset: Number(options.pitchShiftOffset) || 0,
     pitchRangeScale: Number(options.pitchRangeScale) || 1,
+    intensityScale: Number(options.intensityScale) || 1,
+    pauseScale: Number(options.pauseScale) || 1,
+    tone: typeof options.tone === 'string' ? options.tone : 'neutral',
     emphasisWordIndexes: Array.isArray(options.emphasisWordIndexes) ? options.emphasisWordIndexes : []
   };
 }
@@ -462,6 +670,7 @@ function splitTinyAvaLine(value, options, maxChars, autoTextProsody, manualEmpha
   if (!line) return [];
   const output = [];
   let buffer = '';
+  let previousProsody = null;
   for (let index = 0; index < line.length; index++) {
     const character = line[index];
     buffer += character;
@@ -477,13 +686,14 @@ function splitTinyAvaLine(value, options, maxChars, autoTextProsody, manualEmpha
       buffer += line[next];
       next++;
     }
-    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody);
+    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody, previousProsody);
+    previousProsody = sentenceOptions._deliveryProsody;
     appendBoundedTinyAvaSegment(output, buffer, pause, sentenceOptions, maxChars, manualEmphasisPhrases);
     buffer = '';
     index = next - 1;
   }
   if (buffer.trim()) {
-    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody);
+    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody, previousProsody);
     appendBoundedTinyAvaSegment(output, buffer, 0, sentenceOptions, maxChars, manualEmphasisPhrases);
   }
   return output;
@@ -511,10 +721,20 @@ export function segmentTinyAvaText(value, maxChars = 180, prosodyOptions = {}) {
   const limit = Math.max(48, Math.min(360, Math.trunc(Number(maxChars) || 180)));
   const autoTextProsody = !prosodyOptions || prosodyOptions.autoTextProsody !== false;
   const manualEmphasisPhrases = [];
-  const sourceText = String(value || '').replace(/\[\[(?:تأکید|emphasis)\s*:\s*([\s\S]*?)\]\]/giu, (_cue, phrase) => {
-    if (String(phrase || '').trim()) manualEmphasisPhrases.push(String(phrase).trim());
-    return phrase;
-  });
+  const sourceText = stripSpeechMarkupTags(value)
+    .replace(/\[\[(?:تأکید|emphasis)\s*:\s*([\s\S]*?)\]\]/giu, (_cue, phrase) => {
+      if (String(phrase || '').trim()) manualEmphasisPhrases.push(String(phrase).trim());
+      return phrase;
+    })
+    .replace(/\[\[([\s\S]*?)\]\]/gu, (marker, rawCue) => {
+      const cue = String(rawCue || '').trim().toLowerCase();
+      const supported = [
+        'مکث کوتاه', 'pause:short', 'مکث', 'pause', 'مکث بلند', 'pause:long',
+        'نفس', 'مکث تنفسی', 'breath', 'آه', 'اوه', 'هوم', 'sigh'
+      ].includes(cue) || /^(?:کشیده|stretch)\s*:/iu.test(cue);
+      return supported ? marker : '';
+    })
+    .replace(/\[\[(?:(?!\]\])[\s\S])*$/gu, '');
   const output = [];
   let pendingLeadingPause = 0;
   let cursor = 0;
@@ -560,7 +780,7 @@ export function segmentTinyAvaText(value, maxChars = 180, prosodyOptions = {}) {
       const interjection = normalizedCue === 'sigh' ? 'آه' : cue;
       appendSpeech(interjection, { speedScale: 0.94, pitchRangeScale: 1.08 });
     } else {
-      appendSpeech(match[0]);
+      // Unknown cue markup is metadata for an unsupported engine, never spoken content.
     }
     cursor = markers.lastIndex;
   }

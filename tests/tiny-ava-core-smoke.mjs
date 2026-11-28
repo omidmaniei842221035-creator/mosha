@@ -5,12 +5,16 @@ import {
   TINY_AVA_TOTAL_BYTES,
   TINY_AVA_VERSION,
   TINY_AVA_VOICES,
+  analyzePersianDeliveryProsody,
+  analyzePersianDeliverySequence,
   applyPersianPronunciationLexicon,
   byteT5Encode,
   expandPersianNumbers,
   parsePersianPronunciationLexicon,
   normalizeTinyAvaText,
   phonemizeTinyAvaSentence,
+  segmentPersianDeliveryText,
+  stripSpeechMarkupTags,
   splitTinyAvaSentences,
   segmentTinyAvaText,
   tinyAvaPhonemeIdsFromRepr1
@@ -29,6 +33,12 @@ assert.equal(
   'کِتابِ دوازده میلیون و سیصد و پنجاه هزار تومان, ساعت ده و سی دقیقه و هشتاد و پنج درصد'
 );
 assert.equal(normalizeTinyAvaText('بارانِ ریزی'), 'بارانِ ریزی'); // Preserve user-supplied diacritics.
+assert.equal(
+  stripSpeechMarkupTags('x < y > z؛ <prosody rate="slow">آرام</prosody>').replace(/\s+/gu, ' ').trim(),
+  'x < y > z؛ آرام',
+  'SSML is removed while ordinary less-than comparisons are preserved'
+);
+assert.equal(stripSpeechMarkupTags('متن <unfinished').trim(), 'متن');
 assert.equal(expandPersianNumbers('۱۲٬۳۵۰٬۰۰۰'), 'دوازده میلیون و سیصد و پنجاه هزار');
 assert.equal(expandPersianNumbers('1.05'), 'یک ممیز صفر پنج');
 assert.equal(expandPersianNumbers('10:30'), 'ده و سی دقیقه');
@@ -51,6 +61,13 @@ assert.deepEqual(
   splitTinyAvaSentences('سلام. آیا ساعت ۱۰:۳۰ آماده‌ای؟'),
   ['سلام.', 'آیا ساعت ده و سی دقیقه آماده‌ای?']
 );
+const deliveryChunks = segmentPersianDeliveryText('سلام. نام کاظمی، مبلغ ۱۲٬۳۵۰٬۰۰۰ تومان ثبت شد؟\n\nجزئیات بعدی.', 180);
+assert.deepEqual(deliveryChunks.map(chunk => chunk.text), [
+  'سلام.', 'نام کاظمی، مبلغ ۱۲٬۳۵۰٬۰۰۰ تومان ثبت شد؟', 'جزئیات بعدی.'
+], 'sentence chunking keeps names, numbers, punctuation, and wording unchanged');
+assert.equal(deliveryChunks[1].pauseAfterMs, 610, 'blank paragraphs create a longer boundary pause');
+assert.equal(deliveryChunks[2].paragraphBreakBefore, true, 'prosody smoothing resets at a new paragraph');
+assert.ok(segmentPersianDeliveryText('واژه '.repeat(100), 48).every(chunk => chunk.text.length <= 48));
 const timedSegments = segmentTinyAvaText('سلام، حال شما چطور است؟');
 assert.deepEqual(timedSegments.map(segment => segment.text), ['سلام, حال شما چطور است?']);
 assert.equal(timedSegments[0].pauseAfterMs, 390);
@@ -66,7 +83,20 @@ assert.ok(gentleSegments[0].speedScale < 1 && gentleSegments[0].pitchShiftOffset
 const formalSegments = segmentTinyAvaText('با احترام، لطفاً نامه را بررسی کنید.');
 assert.ok(formalSegments[0].speedScale < 1 && formalSegments[0].pitchRangeScale < 1);
 const fixedStyleSegments = segmentTinyAvaText('از شما ممنونم.', 180, { autoTextProsody: false });
-assert.equal(fixedStyleSegments[0].pitchShiftOffset, 0, 'a manually chosen preset bypasses automatic lexical tone');
+assert.equal(fixedStyleSegments[0].pitchShiftOffset, 0, 'callers can explicitly disable lexical tone when they need a fixed reading');
+assert.equal(fixedStyleSegments[0].tone, 'neutral');
+const reassurance = analyzePersianDeliveryProsody('نگران نباشید؛ پیگیری می‌کنم.');
+const empathy = analyzePersianDeliveryProsody('متأسفم که چنین دشواری‌ای پیش آمده است.');
+const neutralDelivery = analyzePersianDeliveryProsody('پرونده در ساعت ده ثبت شد.');
+assert.equal(reassurance.tone, 'reassuring');
+assert.equal(empathy.tone, 'empathetic');
+assert.equal(neutralDelivery.tone, 'neutral', 'emotion is not inferred without a clear textual cue');
+assert.ok(reassurance.pauseScale > neutralDelivery.pauseScale && reassurance.intensityScale === 1);
+assert.ok(empathy.speedScale < neutralDelivery.speedScale && empathy.intensityScale < 1);
+const deliverySequence = analyzePersianDeliverySequence(['از شما ممنونم.', 'پرونده در ساعت ده ثبت شد.']);
+assert.deepEqual(deliverySequence.map(profile => profile.tone), ['warm', 'neutral']);
+assert.ok(deliverySequence[1].pitchShiftOffset > 0 && deliverySequence[1].pitchShiftOffset < deliverySequence[0].pitchShiftOffset,
+  'tone changes release gradually rather than switching abruptly');
 const emphasizedAmount = segmentTinyAvaText('مبلغ ۱۲٬۳۵۰٬۰۰۰ تومان برای آقای امیری.')[0];
 const amountWords = emphasizedAmount.text.split(/\s+/u).map(word => word.replace(/^[^\p{L}\p{N}\u200c]+|[^\p{L}\p{N}\u200c]+$/gu, '')).filter(Boolean);
 const highlightedWords = new Set(emphasizedAmount.emphasisWordIndexes.map(index => amountWords[index]));
@@ -84,8 +114,12 @@ const unspacedBoundedSegments = segmentTinyAvaText('x'.repeat(500), 48);
 assert.ok([...boundedSegments, ...unspacedBoundedSegments].every(segment => segment.type !== 'speech' || segment.text.length <= 48));
 const expressiveSegments = segmentTinyAvaText('این [[کشیده:واژه]] است [[آه]] [[نفس]] ادامه دارد.');
 assert.ok(expressiveSegments.some(segment => segment.type === 'breath' && segment.durationMs === 230));
-assert.ok(expressiveSegments.some(segment => segment.type === 'speech' && segment.text === 'واژه' && segment.speedScale === 0.76));
+assert.ok(expressiveSegments.some(segment => segment.type === 'speech' && segment.text === 'واژه' && segment.speedScale < 0.8));
 assert.ok(expressiveSegments.some(segment => segment.type === 'speech' && segment.text === 'آه'));
+const strippedUnsupportedMarkup = segmentTinyAvaText('متن <prosody rate="slow">فارسی</prosody> [[mood:angry]] نهایی است.');
+assert.deepEqual(strippedUnsupportedMarkup.map(segment => segment.text), ['متن فارسی نهایی است.']);
+assert.ok(strippedUnsupportedMarkup.every(segment => !/prosody|mood|angry/u.test(segment.text)), 'unsupported tags/cues are never sent to the phonemizer');
+assert.equal(segmentTinyAvaText('متن [[mood:angry')[0].text, 'متن', 'an unfinished cue is not read as literal markup');
 const pauseCueSegments = segmentTinyAvaText('پیش از مکث [[مکث بلند]] پس از مکث.');
 assert.equal(pauseCueSegments[0].pauseAfterMs, 720);
 assert.deepEqual([...byteT5Encode('ا')], [219n, 170n, 1n]);

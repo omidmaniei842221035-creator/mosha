@@ -1,6 +1,6 @@
 /* Local tiny-ava v2 inference. ONNX Runtime and every model byte are same-origin/local after installation. */
 import * as ort from '../piper/ort.min.mjs';
-import { createPiperWavBuffer } from '../piper/core.mjs';
+import { applySpeechIntensity, createPiperWavBuffer } from '../piper/core.mjs';
 import {
   TINY_AVA_ASSETS,
   TINY_AVA_MODEL_ID,
@@ -74,14 +74,8 @@ async function loadModel(requestId) {
   }
 }
 
-function limitPeak(wave) {
-  let peak = 0;
-  for (let index = 0; index < wave.length; index++) peak = Math.max(peak, Math.abs(wave[index]));
-  if (!Number.isFinite(peak) || peak <= 0.99) return wave;
-  const scale = 0.99 / peak;
-  const output = new Float32Array(wave.length);
-  for (let index = 0; index < wave.length; index++) output[index] = wave[index] * scale;
-  return output;
+function limitPeak(wave, intensityScale = 1) {
+  return applySpeechIntensity(wave, intensityScale);
 }
 
 function clamp(value, minimum, maximum, fallback = 0) {
@@ -124,7 +118,7 @@ async function synthesize(message) {
     throw new Error('درخواست گفتار tiny-ava معتبر نیست.');
   }
   await loadModel(requestId);
-  const autoTextProsody = settings.autoTextProsody !== false && (!settings.style || settings.style === 'auto');
+  const autoTextProsody = settings.autoTextProsody !== false;
   const segments = segmentTinyAvaText(text, 180, { autoTextProsody });
   if (!segments.length) throw new Error('متنی برای خواندن باقی نماند.');
   const speed = clamp(settings && settings.speed, 0.7, 1.4, 1);
@@ -140,7 +134,7 @@ async function synthesize(message) {
         ? `در حال افزودن مکث تنفسی نرم، بخش ${index + 1} از ${segments.length}…`
         : `در حال ساخت بخش ${index + 1} از ${segments.length} با صدای ${selectedVoice.title}…`);
     if (segment.type === 'breath') {
-      rendered.push({ wave: createBreathWave(segment.durationMs, requestId + index), pauseAfterMs: segment.pauseAfterMs });
+      rendered.push({ wave: createBreathWave(segment.durationMs, requestId + index), pauseAfterMs: segment.pauseAfterMs, pauseScale: 1 });
       continue;
     }
     const hasFollowing = segments.slice(index + 1).some(item => item.type === 'speech');
@@ -162,7 +156,11 @@ async function synthesize(message) {
     });
     const audio = output && output.audio && output.audio.data;
     if (!audio || !audio.length) throw new Error('مدل tiny-ava برای این بخش صدای قابل پخش نساخت.');
-    rendered.push({ wave: limitPeak(audio), pauseAfterMs: segment.pauseAfterMs });
+    rendered.push({
+      wave: limitPeak(audio, segment.intensityScale),
+      pauseAfterMs: segment.pauseAfterMs,
+      pauseScale: Number(segment.pauseScale) || 1
+    });
   }
 
   if (!rendered.length) throw new Error('واج‌شناس برای این متن گفتاری تولید نکرد؛ متن فارسی یا حرکت‌گذاری را بررسی کنید.');
@@ -176,7 +174,7 @@ async function synthesize(message) {
   rendered.forEach((item, index) => {
     waves.push(item.wave);
     if (index < rendered.length - 1) {
-      pausesMs.push(clamp(item.pauseAfterMs * pauseScale, 0, 2600, 0));
+      pausesMs.push(clamp(item.pauseAfterMs * pauseScale * item.pauseScale, 0, 2600, 0));
     }
   });
   const wav = createPiperWavBuffer(waves, SAMPLE_RATE, pausesMs);

@@ -1,15 +1,17 @@
 /* A small local-only worker bridge. No network host other than this app is contacted. */
-import { synthesizePersianWav } from './espeak-core.mjs';
+import { synthesizePersianSegmentsWav } from './espeak-core.mjs';
 
 self.onmessage = async event => {
   const message = event.data || {};
   const requestId = message.requestId;
   try {
-    const wav = await synthesizePersianWav(
-      message.text,
+    const chunks = Array.isArray(message.chunks) ? message.chunks : [{ text: message.text }];
+    const wav = await synthesizePersianSegmentsWav(
+      chunks,
       message.rate,
       message.pitch,
-      phase => self.postMessage({ type: 'progress', requestId, phase })
+      message.pauseScale,
+      progress => self.postMessage({ type: 'progress', requestId, ...progress })
     );
     self.postMessage({ type: 'complete', requestId, wav }, [wav]);
   } catch (error) {

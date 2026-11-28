@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {
+  applySpeechIntensity,
   createPiperWavBuffer,
   normalizePersianTtsText,
+  normalizePiperSpeechChunks,
   pauseAfterPiperChunk,
   piperInputIds,
   sha256Hex,
@@ -26,6 +28,19 @@ assert.equal(await sha256Hex(new TextEncoder().encode('test').buffer), '9f86d081
 assert.equal(await sha256Hex(new Blob(['test'])), '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08');
 assert.deepEqual([...piperInputIds({ phoneme_ids: [0, 2, 1] })], [0n, 2n, 1n]);
 assert.throws(() => piperInputIds({ phoneme_ids: [] }), /مدل آوایی/);
+const contextualChunks = normalizePiperSpeechChunks([
+  { text: 'متأسفم.', prosody: { speedScale: 0.95, pauseScale: 1.12, intensityScale: 0.97, tone: 'empathetic' } },
+  { text: 'نگران نباشید.', prosody: { speedScale: 5, pauseScale: 5, intensityScale: 5 } }
+]);
+assert.deepEqual(contextualChunks[0], {
+  text: 'متأسفم.', pauseAfterMs: 0, speedScale: 0.95, pauseScale: 1.12, intensityScale: 0.97, tone: 'empathetic'
+});
+assert.deepEqual(contextualChunks[1], {
+  text: 'نگران نباشید.', pauseAfterMs: 0, speedScale: 1.12, pauseScale: 1.35, intensityScale: 1.08, tone: 'neutral'
+}, 'per-sentence prosody is bounded before it reaches the model');
+const morePresent = applySpeechIntensity(Float32Array.of(0.2, -0.2), 1.04);
+assert.ok(morePresent[0] > 0.2 && morePresent[0] < 0.21);
+assert.ok(applySpeechIntensity(Float32Array.of(0.9, -0.9), 1.08).every(sample => Math.abs(sample) <= 0.99));
 assert.equal(pauseAfterPiperChunk('آماده‌ای؟'), 250);
 assert.equal(pauseAfterPiperChunk('آماده‌ای؟ ” '), 250, 'closing quotes and their whitespace keep sentence timing');
 assert.equal(pauseAfterPiperChunk('سلام،'), 110);

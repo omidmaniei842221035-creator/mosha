@@ -42,7 +42,7 @@ test('uses an opt-in local model API that stays separate from the public chat hi
 });
 
 test('precaches the new app assets and advances the service-worker cache key', () => {
-  assert.match(serviceWorker, /shahr-advisor-pc-v45/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v46/u);
   for (const path of ['debt-collection.css', 'debt-collection.js', 'debt-collection-core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline app shell`);
   }

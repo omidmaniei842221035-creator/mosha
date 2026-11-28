@@ -1,0 +1,50 @@
+THIRD-PARTY SOFTWARE NOTICES — PIPER BROWSER RUNTIME
+
+This application redistributes the runtime files listed below. Model weights are not included in the application package; they are fetched only after the user's explicit selection. See the per-model note at the end.
+
+1. @diffusionstudio/piper-wasm 1.0.0
+   Included files: piper_phonemize.wasm and piper_phonemize.data
+   Package metadata license: MIT; package author field: Konstantin Paulus.
+   Source/build references:
+   https://github.com/diffusion-studio/piper-wasm
+   https://github.com/wide-video/piper-phonemize
+   The generated runtime/data include eSpeak NG components/data; eSpeak NG is GPL-3.0-or-later. The full GPL text is in ../LICENSE-GPL-3.0.txt. eSpeak NG source: https://github.com/espeak-ng/espeak-ng
+
+2. @mintplex-labs/piper-tts-web 1.0.5
+   Included file: piper-phonemize.mjs (the package's browser phonemizer module)
+   Package metadata license: MIT; package author field: team@mintplexlabs.com.
+   Source: https://github.com/Mintplex-Labs/piper-tts-web
+
+3. ONNX Runtime Web 1.20.1
+   Included files: ort.min.mjs, ort-wasm-simd-threaded.mjs, and ort-wasm-simd-threaded.wasm
+   License: MIT. Source: https://github.com/microsoft/onnxruntime
+   The bundled-license comment in ort.min.mjs also identifies long.js under Apache-2.0; the full Apache-2.0 license text is included at ../../local-llm/LICENSE-APACHE-2.0.txt.
+
+The npm tarballs for items 1 and 2 declare MIT in package.json but do not contain a standalone LICENSE file or a copyright-year notice. This notice records the package metadata and author fields rather than inventing copyright wording; consult the upstream source links for any later or more specific attribution. ONNX Runtime's bundled license comments identify Microsoft Corporation and the included long.js Apache-2.0 notice.
+
+MIT LICENSE TERMS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The copyright notice(s) and this permission notice shall be included in all
+copies or substantial portions of the Software. Refer to the package and
+upstream notices above for the applicable copyright holder(s).
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+MODEL / VOICE DATA NOTE
+
+The `fa_IR-amir-medium` and `fa_IR-gyro-medium` ONNX weights are fetched directly from:
+https://huggingface.co/diffusionstudio/piper-voices/tree/50f6de3c5afb40402551adb29d9e08dff2ec4624
+They are not redistributed in this application ZIP. That repository's top-level metadata declares MIT, while individual voice MODEL_CARD files describe their data/training sources and may add relevant terms. The Amir card states CC0 for its dataset; the Gyro card says "See URL" and points to gyroing. These notes do not establish the complete rights for the trained weights, generated voice, or commercial use. Review the current source repository and each MODEL_CARD before redistributing or using a voice commercially.

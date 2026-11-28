@@ -3,3 +3,4 @@ Start-ShahrCreditAdvisor.bat whitespace=cr-at-eol
 Install-As-Desktop-App.bat whitespace=cr-at-eol
 local-llm/*.mjs whitespace=-blank-at-eol
 speech-vendor/*.mjs whitespace=-blank-at-eol
+speech-vendor/piper/*.mjs whitespace=-blank-at-eol

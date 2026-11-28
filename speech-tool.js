@@ -9,6 +9,23 @@
   const LANGUAGE = 'fa-IR';
   const PREF_KEY = 'sca_speech_preferences';
   const BUNDLED_VOICE_ID = 'bundled-persian-espeak';
+  const PIPER_VOICE_PREFIX = 'piper:';
+  const PIPER_MODEL_BASE = 'https://huggingface.co/diffusionstudio/piper-voices/resolve/50f6de3c5afb40402551adb29d9e08dff2ec4624/';
+  const PIPER_VOICES = {
+    'fa_IR-amir-medium': {
+      title: 'صدای عصبی فارسی · Amir',
+      modelPath: 'fa/fa_IR/amir/medium/fa_IR-amir-medium',
+      bytes: 63531379,
+      sha256: 'fb815380d969ea372b0b21b0de14421f58fe481047e153e69685d079b6e1a9d1'
+    },
+    'fa_IR-gyro-medium': {
+      title: 'صدای عصبی فارسی · Gyro',
+      modelPath: 'fa/fa_IR/gyro/medium/fa_IR-gyro-medium',
+      bytes: 63122309,
+      sha256: '37dfae43c82ee38ca9e6aac4ffef76a74d6b282ccbc397b27761f35d355c99ba'
+    }
+  };
+  const DEFAULT_PIPER_VOICE = 'fa_IR-amir-medium';
   const state = {
     recognitionCtor: null,
     recognitionStatus: 'checking',
@@ -26,6 +43,14 @@
     ttsSessionUsed: false,
     ttsPreparing: false,
     ttsWorker: null,
+    piperWorker: null,
+    piperVoiceIds: new Set(),
+    piperAvailabilityChecked: false,
+    piperDownloading: false,
+    piperDownloadCancelable: false,
+    piperDownloadAbort: null,
+    piperDownloadVoiceId: '',
+    piperAvailabilityRequest: 0,
     ttsAudioUrl: '',
     ttsSynthesisRate: 1,
     ttsChunks: [],
@@ -52,7 +77,7 @@
             <div class="speech-hero-copy">
               <div class="speech-kicker">پردازش روی دستگاه، بدون سرویس ابری</div>
               <h2 id="speechTitle">استودیوی گفتار فارسی</h2>
-              <p>خواندن متن با صدای فارسیِ همراه برنامه؛ دیکتهٔ آفلاین نیز در مرورگرهای سازگار و فقط روی همین دستگاه انجام می‌شود.</p>
+              <p>خواندن متن با صدای عصبی فارسی پس از دریافت یک‌بارهٔ مدل؛ دیکته نیز در مرورگر سازگار و فقط روی همین دستگاه اجرا می‌شود.</p>
             </div>
           </div>
           <div id="speechOverall" class="speech-hero-badge" role="status" aria-live="polite"><i></i><span>در حال بررسی قابلیت‌های دستگاه…</span></div>
@@ -110,20 +135,28 @@
               <div class="speech-panel-icon tts" aria-hidden="true">${icon('school', 20)}</div>
               <div>
                 <h3 id="speechTtsTitle">نوشتار به گفتار</h3>
-                <p>خوانش متن با صدای فارسیِ محلی و کنترل سرعت و لحن</p>
+                <p>خوانش آفلاین با صدای عصبی فارسی، پس از دریافت اولیهٔ مدل روی همین دستگاه</p>
               </div>
             </div>
-            <div id="speechTtsStatus" class="speech-status" data-state="busy" role="status" aria-live="polite">در حال آماده‌سازی صدای فارسیِ همراه برنامه…</div>
-            <div id="speechTtsGuidance" class="speech-note">صدای eSpeak NG فارسی همراه برنامه است و بدون صدای نصب‌شده در سیستم‌عامل هم آفلاین کار می‌کند. این صدا از نظر آهنگ و طبیعی‌بودن به صدای عصبیِ باکیفیت نمی‌رسد؛ صدای محلی سیستم نیز در صورت وجود اختیاری است.</div>
+            <div id="speechTtsStatus" class="speech-status" data-state="busy" role="status" aria-live="polite">در حال بررسی مدل‌های صدای عصبیِ ذخیره‌شده…</div>
+            <div id="speechTtsGuidance" class="speech-note">صدای عصبی فارسی یک‌بار دریافت می‌شود و بعد، ساخت و پخش گفتار روی همین PC و بدون اینترنت انجام می‌شود. خود متن از دستگاه خارج نمی‌شود. eSpeak NG هم به‌عنوان جایگزین کم‌حجم اما مصنوعی باقی است.</div>
 
             <label class="speech-live-label" for="speechTtsInput">متن برای خواندن <small>متن در حافظهٔ مرورگر ذخیره نمی‌شود</small></label>
-            <textarea id="speechTtsInput" class="speech-textarea tts" dir="rtl" lang="fa" maxlength="8000" placeholder="متن فارسی را اینجا بنویسید یا از دیکته منتقل کنید…">درود. این صدا همراه برنامه است و متن را بدون اینترنت می‌خواند؛ سرعت و زیر و بمی را هم می‌توانید تنظیم کنید.</textarea>
+            <textarea id="speechTtsInput" class="speech-textarea tts" dir="rtl" lang="fa" maxlength="8000" placeholder="متن فارسی را اینجا بنویسید یا از دیکته منتقل کنید…">درود. این نمونه با صدای عصبی فارسی ساخته می‌شود؛ مدل را یک‌بار دریافت کنید و بعد آفلاین بخوانید.</textarea>
             <div class="speech-meta"><span id="speechTtsChars">۰ نویسه</span><span id="speechTtsWords">۰ واژه</span></div>
 
             <div class="speech-settings">
               <div class="speech-setting voice-select">
                 <label for="speechVoice">صدای فارسی محلی</label>
-                <select id="speechVoice" class="inp" disabled aria-label="انتخاب صدای فارسی محلی"><option value="">در حال آماده‌سازی صدای همراه برنامه…</option></select>
+                <select id="speechVoice" class="inp" disabled aria-label="انتخاب صدای فارسی محلی"><option value="">در حال آماده‌سازی صداهای محلی…</option></select>
+              </div>
+              <div class="speech-neural-download">
+                <div class="speech-neural-copy"><b>صدای عصبیِ فارسی</b><small>برای هر صدا یک دریافت اولیهٔ حدود ۶۱ MiB؛ پس از آن کاملاً آفلاین و فقط روی همین دستگاه.</small></div>
+                <button id="speechPiperInstall" class="btn ghost" type="button" hidden>${icon('download', 15)} دریافت مدل صدا</button>
+                <div id="speechPiperDownloadWrap" class="speech-piper-progress" hidden>
+                  <div><span id="speechPiperDownloadText">در حال دریافت مدل…</span><b id="speechPiperDownloadPercent">۰٪</b></div>
+                  <i><span id="speechPiperDownloadBar"></span></i>
+                </div>
               </div>
               <div class="speech-setting">
                 <label for="speechRate">سرعت خوانش <b id="speechRateValue">۱٫۰۰×</b></label>
@@ -147,13 +180,13 @@
             </div>
             <audio id="speechTtsAudio" class="speech-audio" controls preload="metadata" hidden aria-label="پخش صدای فارسی تولیدشده"></audio>
             <a id="speechTtsDownload" class="btn ghost speech-audio-download" download="گفتار-فارسی.wav" hidden>${icon('download', 15)} دریافت فایل WAV</a>
-            <div id="speechTtsHint" class="speech-note warn">صدای پیش‌فرض فارسی eSpeak NG در خود برنامه بسته‌بندی شده است؛ کیفیت آن ماشینی و کم‌طبیعی‌تر از صدای عصبی است، اما به اینترنت، نصب زبان یا صدای سیستم‌عامل وابسته نیست.</div>
+            <div id="speechTtsHint" class="speech-note warn">صدای عصبیِ Piper در این دستگاه نصب نشده است. پس از دریافت یک‌بارهٔ مدل حدود ۶۱ MiB، پردازش و پخش گفتار کاملاً محلی می‌شود؛ اگر مدل را نخواهید، صدای eSpeak NG جایگزین است اما مصنوعی‌تر شنیده می‌شود.</div>
           </section>
         </div>
 
         <div class="speech-tips" aria-label="نکته‌های حریم خصوصی و آفلاین">
           <div class="speech-tip"><span class="speech-tip-icon" aria-hidden="true">${icon('shield', 15)}</span><div><b>بدون ارسال صدا یا متن</b><small>فایل صوتی یا متنِ ورودی از این ابزار به شبکه فرستاده نمی‌شود.</small></div></div>
-          <div class="speech-tip"><span class="speech-tip-icon" aria-hidden="true">${icon('tools', 15)}</span><div><b>صدای خوانش همراه برنامه</b><small>eSpeak NG فارسی و موتور لازم محلی‌اند؛ صدای سیستم لازم نیست.</small></div></div>
+          <div class="speech-tip"><span class="speech-tip-icon" aria-hidden="true">${icon('tools', 15)}</span><div><b>گفتار عصبی و محلی</b><small>مدل فارسی فقط یک‌بار دریافت و در ذخیره‌ساز خصوصی همین مرورگر نگه‌داری می‌شود؛ متن جایی ارسال نمی‌شود.</small></div></div>
           <div class="speech-tip"><span class="speech-tip-icon" aria-hidden="true">${icon('info', 15)}</span><div><b>دیکته وابسته به مرورگر</b><small>گفتار به نوشتار به پشتیبانی on-device و بستهٔ fa-IR مرورگر وابسته است؛ مدل STT جداگانه همراه برنامه نیست.</small></div></div>
         </div>
       </div>`;
@@ -166,6 +199,7 @@
     updateTranscriptCounters();
     updateTtsCounters();
     updateVoiceList();
+    refreshStoredPiperVoices();
     refreshRecognitionSupport();
     [250, 900, 2200].forEach(delay => window.setTimeout(() => {
       if (!state.localPersianVoices.length) updateVoiceList();
@@ -200,9 +234,18 @@
     byButton('speechPause', pauseSpeech);
     byButton('speechResume', resumeSpeech);
     byButton('speechTtsStop', () => stopSpeech(true));
+    byButton('speechPiperInstall', installOrRemovePiperVoice);
 
     const voice = byId('speechVoice');
-    if (voice) voice.addEventListener('change', () => { saveSpeechPreferences(); updateTtsControls(); });
+    if (voice) voice.addEventListener('change', () => {
+      if (state.piperWorker && !state.ttsPreparing && !state.ttsRunning) {
+        try { state.piperWorker.terminate(); } catch (_) { /* no-op */ }
+        state.piperWorker = null;
+      }
+      saveSpeechPreferences();
+      updateVoiceGuidance();
+      updateTtsControls();
+    });
     const rate = byId('speechRate');
     if (rate) rate.addEventListener('input', () => {
       updateRangeLabels();
@@ -651,17 +694,30 @@
     const synth = window.speechSynthesis;
     const canUseBundledVoice = typeof window.Worker === 'function' &&
       typeof window.Audio === 'function' && typeof window.URL.createObjectURL === 'function';
+    const canUsePiperVoice = canUseBundledVoice && typeof window.indexedDB !== 'undefined' &&
+      typeof window.WebAssembly !== 'undefined' && !!(window.crypto && window.crypto.subtle);
 
     state.voices = synth && typeof synth.getVoices === 'function' ? (synth.getVoices() || []) : [];
     const persianVoices = state.voices.filter(isPersianVoice);
     state.localPersianVoices = persianVoices.filter(voice => voice.localService === true);
     select.replaceChildren();
 
+    const piperGroup = document.createElement('optgroup');
+    piperGroup.label = 'صدای عصبی فارسی · دریافت اولیه و سپس آفلاین';
+    Object.entries(PIPER_VOICES).forEach(([id, model]) => {
+      const option = document.createElement('option');
+      option.value = `${PIPER_VOICE_PREFIX}${id}`;
+      option.textContent = `${model.title} — حدود ۶۱ MiB`;
+      option.disabled = !canUsePiperVoice;
+      piperGroup.appendChild(option);
+    });
+    select.appendChild(piperGroup);
+
     const bundledGroup = document.createElement('optgroup');
-    bundledGroup.label = 'صدای همراه برنامه';
+    bundledGroup.label = 'صدای جایگزینِ همراه برنامه';
     const bundledOption = document.createElement('option');
     bundledOption.value = BUNDLED_VOICE_ID;
-    bundledOption.textContent = 'فارسی eSpeak NG — آفلاین و همراه برنامه';
+    bundledOption.textContent = 'فارسی eSpeak NG — سریع و همراه برنامه، اما مصنوعی‌تر';
     bundledOption.disabled = !canUseBundledVoice;
     bundledGroup.appendChild(bundledOption);
     select.appendChild(bundledGroup);
@@ -678,44 +734,302 @@
       select.appendChild(systemGroup);
     }
 
-    select.disabled = !canUseBundledVoice && !state.localPersianVoices.length;
+    select.disabled = !canUsePiperVoice && !canUseBundledVoice && !state.localPersianVoices.length;
     const prefs = readSpeechPreferences();
     const savedNativeVoice = state.localPersianVoices.find(voice => voice.voiceURI === prefs.voiceURI);
-    const savedVoiceExists = prefs.voiceURI === BUNDLED_VOICE_ID || !!savedNativeVoice;
-    const defaultValue = savedVoiceExists
-      ? prefs.voiceURI
-      : canUseBundledVoice
-        ? BUNDLED_VOICE_ID
-        : state.localPersianVoices.length
-          ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
-          : '';
+    const savedBundledVoice = canUseBundledVoice && prefs.voiceURI === BUNDLED_VOICE_ID;
+    const savedPiperId = String(prefs.voiceURI || '').startsWith(PIPER_VOICE_PREFIX)
+      ? String(prefs.voiceURI).slice(PIPER_VOICE_PREFIX.length)
+      : '';
+    const savedPiperExists = canUsePiperVoice && Object.prototype.hasOwnProperty.call(PIPER_VOICES, savedPiperId);
+    const defaultValue = savedNativeVoice
+      ? savedNativeVoice.voiceURI
+      : savedPiperExists
+        ? `${PIPER_VOICE_PREFIX}${savedPiperId}`
+        : savedBundledVoice
+          ? BUNDLED_VOICE_ID
+          : canUsePiperVoice
+            ? `${PIPER_VOICE_PREFIX}${DEFAULT_PIPER_VOICE}`
+            : canUseBundledVoice
+              ? BUNDLED_VOICE_ID
+              : state.localPersianVoices.length
+                ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
+                : '';
     select.value = defaultValue;
 
-    const rate = byId('speechRate');
-    const pitch = byId('speechPitch');
-    const hasUsableVoice = canUseBundledVoice || state.localPersianVoices.length > 0;
-    if (rate) rate.disabled = !hasUsableVoice;
-    if (pitch) pitch.disabled = !hasUsableVoice;
-
-    if (!state.ttsRunning && !state.ttsPreparing && !state.ttsSessionUsed) {
-      if (canUseBundledVoice) {
-        setStatus('speechTtsStatus', 'صدای فارسیِ eSpeak NG همراه برنامه آماده است؛ برای خواندن به نصب صدا نیاز ندارید.', 'ready');
-        setStatus('speechTtsGuidance', 'صدای همراه برنامه کاملاً محلی است و متن را به شبکه نمی‌فرستد. کیفیت آن ماشینی است؛ اگر صدای فارسی محلی دیگری روی دستگاه دارید، می‌توانید آن را هم انتخاب کنید.', 'ok');
-      } else if (state.localPersianVoices.length) {
-        setStatus('speechTtsStatus', `${faNumber(state.localPersianVoices.length)} صدای فارسیِ محلی آماده است؛ خوانش در همین دستگاه انجام می‌شود.`, 'ready');
-        setStatus('speechTtsGuidance', 'فقط صداهای فارسی‌ای که مرورگر محلی اعلام می‌کند قابل انتخاب‌اند؛ هیچ صدای ابری استفاده نمی‌شود.', 'ok');
-      } else {
-        setStatus('speechTtsStatus', 'مرورگر امکان اجرای صدای همراه برنامه را ندارد و صدای فارسیِ محلی هم پیدا نشد.', 'error');
-        setStatus('speechTtsGuidance', 'برای صدای همراه برنامه به Worker ماژولی و پخش WAV محلی نیاز است؛ صدای ابری به‌عنوان جایگزین فعال نمی‌شود.', 'error');
-      }
-    }
+    updateVoiceGuidance();
+    updatePiperDownloadControls();
     updateTtsControls();
+  }
+
+  function refreshStoredPiperVoices() {
+    const request = ++state.piperAvailabilityRequest;
+    import('./speech-vendor/piper/store.mjs').then(store => store.listStoredVoices()).then(ids => {
+      if (request !== state.piperAvailabilityRequest) return;
+      state.piperVoiceIds = new Set(ids.map(String).filter(id => Object.prototype.hasOwnProperty.call(PIPER_VOICES, id)));
+      state.piperAvailabilityChecked = true;
+      updateVoiceGuidance();
+      updatePiperDownloadControls();
+      updateTtsControls();
+    }).catch(error => {
+      if (request !== state.piperAvailabilityRequest) return;
+      state.piperAvailabilityChecked = false;
+      updateVoiceGuidance(error);
+      updatePiperDownloadControls();
+      updateTtsControls();
+      console.warn('Could not inspect the local Persian neural voice store:', error);
+    });
+  }
+
+  function updateVoiceGuidance(storageError) {
+    if (state.ttsPreparing || state.ttsRunning || state.piperDownloading) return;
+    const selected = getSelectedVoice();
+    const hint = byId('speechTtsHint');
+    if (selected && selected.type === 'piper') {
+      const title = PIPER_VOICES[selected.id].title;
+      const installed = state.piperVoiceIds.has(selected.id);
+      if (storageError) {
+        setStatus('speechTtsStatus', 'ذخیره‌ساز پایدار مدل عصبی در این مرورگر در دسترس نیست.', 'error');
+        setStatus('speechTtsGuidance', 'صدای عصبی به IndexedDB و اجرای Worker/WASM نیاز دارد؛ از اجرای برنامه با localhost و مرورگر به‌روز Edge یا Chrome مطمئن شوید.', 'error');
+      } else if (!state.piperAvailabilityChecked) {
+        setStatus('speechTtsStatus', 'در حال بررسی مدل صدای عصبی روی همین دستگاه…', 'busy');
+        setStatus('speechTtsGuidance', 'دریافت اولیه فقط وزن مدل گفتار است؛ بعد از ذخیره، پردازش و پخش گفتار کاملاً آفلاین انجام می‌شود و متن از دستگاه خارج نمی‌شود.', 'warn');
+      } else if (installed) {
+        setStatus('speechTtsStatus', `${title} روی همین دستگاه نصب و آمادهٔ گفتار آفلاین است.`, 'ready');
+        setStatus('speechTtsGuidance', 'مدل ذخیره‌شده از اینترنت استفاده نمی‌کند؛ برای این صدا فقط سرعت قابل تنظیم است. طبیعی‌بودن به کیفیت مدل و تلفظ متن وابسته است و صدای انسانیِ بی‌نقص تضمین نمی‌شود.', 'ok');
+      } else {
+        setStatus('speechTtsStatus', `${title} هنوز دریافت نشده است؛ برای ادامه، دکمهٔ دریافت مدل را بزنید.`, 'idle');
+        setStatus('speechTtsGuidance', 'برای این صدا یک دریافت اولیهٔ حدود ۶۱ MiB لازم است. فایل فقط در حافظهٔ محلی همین مرورگر ذخیره می‌شود؛ پس از آن اینترنت لازم نیست و متن ارسالی وجود ندارد.', 'warn');
+      }
+      if (hint) {
+        hint.dataset.state = installed ? 'ok' : 'warn';
+        hint.textContent = installed
+          ? 'صدای عصبی Piper روی همین دستگاه آماده است. خوانش محلی است؛ اگر آهنگ یا تلفظ خروجی دلخواه نبود، متن و سرعت را بازبینی یا صدای جایگزین را امتحان کنید.'
+          : 'صدای عصبیِ انتخاب‌شده هنوز نصب نیست. پس از دریافت یک‌بارهٔ حدود ۶۱ MiB، ساخت گفتار به‌صورت محلی و آفلاین انجام می‌شود؛ eSpeak NG نیز به‌عنوان جایگزینِ مصنوعی‌تر در دسترس است.';
+      }
+      return;
+    }
+
+    if (selected && selected.type === 'bundled') {
+      setStatus('speechTtsStatus', 'صدای جایگزین فارسیِ eSpeak NG همراه برنامه آماده است.', 'ready');
+      setStatus('speechTtsGuidance', 'این صدا کاملاً آفلاین و کم‌حجم است، اما مصنوعی‌تر از صدای عصبی شنیده می‌شود. برای گفتار طبیعی‌تر، یکی از صداهای عصبی را دریافت کنید.', 'warn');
+      if (hint) {
+        hint.dataset.state = 'warn';
+        hint.textContent = 'eSpeak NG بدون دانلود مدل و کاملاً آفلاین کار می‌کند؛ کیفیت آن ماشینی است. برای صدای فارسی عصبی‌تر، مدل Piper را انتخاب و یک‌بار دریافت کنید.';
+      }
+      return;
+    }
+
+    if (selected && selected.type === 'native') {
+      setStatus('speechTtsStatus', 'صدای فارسی محلی سیستم انتخاب شده است.', 'ready');
+      setStatus('speechTtsGuidance', 'کیفیت و طبیعی‌بودن به بستهٔ صدای نصب‌شده روی Windows و مرورگر بستگی دارد؛ این برنامه صدای ابری را فراخوانی نمی‌کند.', 'ok');
+      if (hint) {
+        hint.dataset.state = 'ok';
+        hint.textContent = 'صدای انتخاب‌شده متعلق به سیستم‌عامل است؛ کیفیت آن را با دکمهٔ خواندن امتحان کنید. هیچ صدای ابری استفاده نمی‌شود.';
+      }
+      return;
+    }
+
+    setStatus('speechTtsStatus', 'این مرورگر صدای فارسی محلیِ قابل استفاده پیدا نکرد.', 'error');
+    setStatus('speechTtsGuidance', 'برای اجرای مدل عصبی، برنامه را از localhost در مرورگر به‌روز Edge یا Chrome باز کنید. صدای ابری به‌عنوان جایگزین استفاده نمی‌شود.', 'error');
+    if (hint) {
+      hint.dataset.state = 'error';
+      hint.textContent = 'مرورگر یا Worker لازم برای صدای محلی در دسترس نیست؛ هیچ سرویس آنلاین فعال نمی‌شود.';
+    }
+  }
+
+  function updatePiperDownloadControls() {
+    const button = byId('speechPiperInstall');
+    const progress = byId('speechPiperDownloadWrap');
+    const selected = getSelectedVoice();
+    const isPiper = !!(selected && selected.type === 'piper');
+    const installed = isPiper && state.piperVoiceIds.has(selected.id);
+    if (button) {
+      button.hidden = !isPiper;
+      button.disabled = !isPiper || (state.ttsPreparing || state.ttsRunning) ||
+        (state.piperDownloading && !state.piperDownloadCancelable) ||
+        (!state.piperDownloading && !installed && !state.piperAvailabilityChecked);
+      button.innerHTML = state.piperDownloading
+        ? state.piperDownloadCancelable
+          ? `${icon('x', 15)} لغو دریافت`
+          : 'در حال بررسی و ذخیرهٔ مدل…'
+        : installed
+          ? `${icon('trash', 15)} حذف مدل از این دستگاه`
+          : `${icon('download', 15)} دریافت مدل (حدود ۶۱ MiB)`;
+    }
+    if (progress) progress.hidden = !state.piperDownloading;
+  }
+
+  function updatePiperDownloadProgress(received, total, label) {
+    const wrap = byId('speechPiperDownloadWrap');
+    const text = byId('speechPiperDownloadText');
+    const percentText = byId('speechPiperDownloadPercent');
+    const bar = byId('speechPiperDownloadBar');
+    const totalBytes = Number(total) || 0;
+    const value = totalBytes > 0 ? Math.max(0, Math.min(100, Math.round(Number(received) / totalBytes * 100))) : 0;
+    if (wrap) wrap.hidden = !state.piperDownloading;
+    if (text) text.textContent = label || `دریافت مدل: ${faNumber(Math.round(Number(received) / 1048576))} از ${faNumber(Math.round(totalBytes / 1048576))} MiB`;
+    if (percentText) percentText.textContent = `${faNumber(value)}٪`;
+    if (bar) bar.style.width = `${value}%`;
+  }
+
+  async function installOrRemovePiperVoice() {
+    if (state.piperDownloading) {
+      if (state.piperDownloadCancelable && state.piperDownloadAbort) state.piperDownloadAbort.abort();
+      return;
+    }
+    const selected = getSelectedVoice();
+    if (!selected || selected.type !== 'piper') return;
+    if (state.piperVoiceIds.has(selected.id)) {
+      if (!window.confirm('فایل مدل این صدای عصبی از حافظهٔ محلی همین مرورگر حذف شود؟')) return;
+      stopSpeech(false);
+      try {
+        const store = await import('./speech-vendor/piper/store.mjs');
+        await store.removeStoredVoice(selected.id);
+        state.piperVoiceIds.delete(selected.id);
+        state.piperAvailabilityChecked = true;
+        setStatus('speechTtsStatus', 'مدل صدای انتخاب‌شده از حافظهٔ محلی حذف شد.', 'idle');
+      } catch (error) {
+        setStatus('speechTtsStatus', `حذف مدل محلی انجام نشد: ${error.message || 'خطای ذخیره‌ساز'}`, 'error');
+      }
+      updateVoiceGuidance();
+      updatePiperDownloadControls();
+      updateTtsControls();
+      return;
+    }
+    await downloadPiperVoice(selected.id);
+  }
+
+  async function downloadPiperVoice(id) {
+    const model = PIPER_VOICES[id];
+    if (!model || state.piperDownloading) return;
+    if (navigator.onLine === false) {
+      setStatus('speechTtsStatus', 'برای دریافت نخستین مدل صدای عصبی، اتصال اینترنت لازم است؛ پس از دریافت، استفاده آفلاین خواهد بود.', 'error');
+      return;
+    }
+
+    const controller = new AbortController();
+    state.piperDownloading = true;
+    state.piperDownloadCancelable = true;
+    state.piperDownloadAbort = controller;
+    state.piperDownloadVoiceId = id;
+    updatePiperDownloadControls();
+    updateTtsControls();
+    setStatus('speechTtsStatus', 'در حال دریافت فایل مدل صدا؛ هیچ متن گفتاری ارسال نمی‌شود…', 'busy');
+    updatePiperDownloadProgress(0, model.bytes, 'در حال آماده‌سازی دریافت مدل فارسی…');
+    let lastProgressAt = 0;
+
+    try {
+      if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+        const estimate = await navigator.storage.estimate();
+        const free = Number(estimate.quota) - Number(estimate.usage || 0);
+        if (Number.isFinite(free) && free > 0 && free < model.bytes * 1.08) {
+          throw new Error('فضای آزاد ذخیره‌ساز مرورگر برای نگه‌داری مدل (حدود ۶۱ MiB) کافی نیست؛ فضای سایت را آزاد کنید.');
+        }
+        if (typeof navigator.storage.persist === 'function') {
+          try { await navigator.storage.persist(); } catch (_) { /* persistence is optional */ }
+        }
+      }
+
+      const core = await import('./speech-vendor/piper/core.mjs');
+      const configResponse = await fetch(`${PIPER_MODEL_BASE}${model.modelPath}.onnx.json`, { signal: controller.signal, cache: 'no-store' });
+      if (!configResponse.ok) throw new Error(`دریافت پیکربندی صدا ناموفق بود (HTTP ${configResponse.status}).`);
+      const config = await configResponse.json();
+      core.validatePersianPiperConfig(config);
+
+      const response = await fetch(`${PIPER_MODEL_BASE}${model.modelPath}.onnx`, { signal: controller.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error(`دریافت وزن مدل صدا ناموفق بود (HTTP ${response.status}).`);
+      const total = Number(response.headers.get('content-length')) || model.bytes;
+      let received = 0;
+      const chunks = [];
+      if (response.body && typeof response.body.getReader === 'function') {
+        const reader = response.body.getReader();
+        while (true) {
+          const item = await reader.read();
+          if (item.done) break;
+          if (!item.value) continue;
+          received += item.value.byteLength;
+          if (received > model.bytes) {
+            controller.abort();
+            throw new Error('فایل دریافتی از اندازهٔ مدل معتبر بزرگ‌تر شد؛ برای جلوگیری از مصرف فضای اضافی متوقف شد.');
+          }
+          chunks.push(item.value);
+          const now = Date.now();
+          if (now - lastProgressAt > 120 || received >= total) {
+            updatePiperDownloadProgress(received, total, `دریافت مدل: ${faNumber((received / 1048576).toFixed(1))} از حدود ${faNumber((model.bytes / 1048576).toFixed(0))} MiB`);
+            lastProgressAt = now;
+          }
+        }
+      } else {
+        const blob = await response.blob();
+        received = blob.size;
+        chunks.push(blob);
+      }
+      if (controller.signal.aborted) {
+        const abortError = new Error('دریافت مدل با انتخاب شما متوقف شد.');
+        abortError.name = 'AbortError';
+        throw abortError;
+      }
+      if (received !== model.bytes) {
+        throw new Error(`اندازهٔ فایل مدل با نسخهٔ معتبر هم‌خوان نیست (${faNumber(received)} بایت). دانلود ناقص ذخیره نشد؛ دوباره تلاش کنید.`);
+      }
+      state.piperDownloadCancelable = false;
+      updatePiperDownloadControls();
+      const modelBlob = new Blob(chunks, { type: 'application/octet-stream' });
+      updatePiperDownloadProgress(model.bytes, model.bytes, 'دریافت کامل شد؛ در حال بررسی SHA-256 مدل…');
+      const actualSha256 = await core.sha256Hex(modelBlob);
+      if (actualSha256 !== model.sha256) {
+        throw new Error('SHA-256 فایل با اثرانگشت مدل منتشرشده هم‌خوان نیست؛ فایل ذخیره نشد. دوباره تلاش کنید و در صورت تکرار، منبع را بررسی کنید.');
+      }
+
+      const record = {
+        id,
+        model: modelBlob,
+        config,
+        bytes: received,
+        modelUrl: `${PIPER_MODEL_BASE}${model.modelPath}.onnx`,
+        savedAt: Date.now()
+      };
+      const store = await import('./speech-vendor/piper/store.mjs');
+      await store.saveStoredVoice(record);
+      state.piperVoiceIds.add(id);
+      state.piperAvailabilityChecked = true;
+      updatePiperDownloadProgress(model.bytes, model.bytes, 'مدل دریافت و در حافظهٔ محلی ذخیره شد.');
+      setStatus('speechTtsStatus', 'مدل گفتار عصبی ذخیره شد؛ از این پس ساخت گفتار با همین صدا بدون اینترنت انجام می‌شود.', 'ready');
+      notify('مدل صدای فارسی ذخیره شد؛ استفادهٔ بعدی آفلاین است.');
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        setStatus('speechTtsStatus', 'دریافت مدل متوقف شد؛ فایل ناقص در حافظه ذخیره نشد.', 'idle');
+        updatePiperDownloadProgress(0, model.bytes, 'دریافت متوقف شد.');
+      } else {
+        const message = error && error.name === 'TypeError'
+          ? 'اتصال به میزبان مدل برقرار نشد؛ اینترنت و اجازهٔ CORS مرورگر/میزبان را بررسی کنید.'
+          : error && error.message ? error.message : 'خطای شبکه یا ذخیره‌ساز';
+        setStatus('speechTtsStatus', `دریافت مدل صدای عصبی ناموفق بود: ${message}`, 'error');
+        updatePiperDownloadProgress(0, model.bytes, 'دریافت مدل ناموفق بود.');
+        console.warn('Persian neural voice download failed:', error);
+      }
+    } finally {
+      state.piperDownloading = false;
+      state.piperDownloadCancelable = false;
+      state.piperDownloadAbort = null;
+      state.piperDownloadVoiceId = '';
+      updateVoiceGuidance();
+      updatePiperDownloadControls();
+      updateTtsControls();
+    }
   }
 
   function getSelectedVoice() {
     const select = byId('speechVoice');
     if (!select || !select.value) return null;
     if (select.value === BUNDLED_VOICE_ID) return { type: 'bundled' };
+    if (select.value.startsWith(PIPER_VOICE_PREFIX)) {
+      const id = select.value.slice(PIPER_VOICE_PREFIX.length);
+      return Object.prototype.hasOwnProperty.call(PIPER_VOICES, id)
+        ? { type: 'piper', id, installed: state.piperVoiceIds.has(id) }
+        : null;
+    }
     const voice = state.localPersianVoices.find(item => item.voiceURI === select.value && item.localService === true);
     return voice ? { type: 'native', voice } : null;
   }
@@ -737,13 +1051,20 @@
     const audioReady = !!(audio && !!audio.currentSrc);
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
+    const voiceSelect = byId('speechVoice');
+    const piperReady = !selected || selected.type !== 'piper' || state.piperVoiceIds.has(selected.id);
 
     if (rate) rate.disabled = !selected || state.ttsPreparing;
-    if (pitch) pitch.disabled = !selected || state.ttsPreparing;
-    if (speak) speak.disabled = !selected || !hasText || state.ttsPreparing || state.ttsRunning;
+    if (pitch) pitch.disabled = !selected || state.ttsPreparing || selected.type === 'piper';
+    if (speak) speak.disabled = !selected || !hasText || !piperReady || state.ttsPreparing || state.ttsRunning;
     if (pause) pause.disabled = !audioPlaying && !(nativeSpeaking && !nativePaused);
     if (resume) resume.disabled = !audioPaused && !nativePaused;
     if (stop) stop.disabled = !state.ttsPreparing && !state.ttsRunning && !nativeSpeaking && !audioReady;
+    if (voiceSelect) {
+      const hasSelectableOption = Array.from(voiceSelect.options).some(option => !option.disabled);
+      voiceSelect.disabled = state.piperDownloading || state.ttsPreparing || state.ttsRunning || !hasSelectableOption;
+    }
+    updatePiperDownloadControls();
   }
 
   function updateRangeLabels() {
@@ -824,6 +1145,17 @@
     const session = ++state.ttsSession;
     state.ttsSessionUsed = true;
 
+    if (selected.type === 'piper') {
+      if (!state.piperVoiceIds.has(selected.id)) {
+        setStatus('speechTtsStatus', 'برای خواندن با صدای عصبی، ابتدا مدل انتخاب‌شده را دریافت کنید.', 'idle');
+        updatePiperDownloadControls();
+        updateTtsControls();
+        return;
+      }
+      startPiperSpeech(text, session, selected);
+      return;
+    }
+
     if (selected.type === 'native') {
       const synth = window.speechSynthesis;
       if (!synth || typeof window.SpeechSynthesisUtterance !== 'function') {
@@ -894,71 +1226,7 @@
       worker.terminate();
       if (state.ttsWorker === worker) state.ttsWorker = null;
       state.ttsPreparing = false;
-
-      const audio = byId('speechTtsAudio');
-      if (!audio) {
-        state.ttsRunning = false;
-        setStatus('speechTtsStatus', 'پخش‌کنندهٔ صدای فارسی در صفحه پیدا نشد.', 'error');
-        updateTtsControls();
-        return;
-      }
-
-      if (state.ttsAudioUrl) URL.revokeObjectURL(state.ttsAudioUrl);
-      state.ttsAudioUrl = URL.createObjectURL(new Blob([message.wav], { type: 'audio/wav' }));
-      audio.onplay = () => {
-        if (session !== state.ttsSession) return;
-        state.ttsRunning = true;
-        setStatus('speechTtsStatus', 'در حال پخش صدای فارسیِ آفلاین eSpeak NG…', 'listening');
-        updateTtsControls();
-      };
-      audio.onpause = () => {
-        if (session !== state.ttsSession || audio.ended) return;
-        state.ttsRunning = false;
-        setStatus('speechTtsStatus', 'خوانش مکث شده است؛ برای ادامه از کنترل پخش استفاده کنید.', 'busy');
-        updateTtsControls();
-      };
-      audio.ontimeupdate = () => {
-        if (session !== state.ttsSession || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
-        updateTtsProgressPercent(audio.currentTime / audio.duration * 100, 'در حال پخش صدای فارسیِ آفلاین…');
-      };
-      audio.onended = () => {
-        if (session !== state.ttsSession) return;
-        state.ttsRunning = false;
-        updateTtsProgressPercent(100, 'خواندن متن به پایان رسید.');
-        setStatus('speechTtsStatus', 'خواندن متن کامل شد؛ فایل WAV محلی برای پخش دوباره یا دریافت آماده است.', 'ready');
-        updateTtsControls();
-      };
-      audio.onerror = () => {
-        if (session !== state.ttsSession) return;
-        state.ttsRunning = false;
-        setStatus('speechTtsStatus', 'فایل WAV ساخته شد، اما مرورگر نتوانست آن را پخش کند؛ از کنترل فایل یا دریافت استفاده کنید.', 'error');
-        updateTtsControls();
-      };
-      audio.src = state.ttsAudioUrl;
-      audio.playbackRate = 1;
-      if ('preservesPitch' in audio) audio.preservesPitch = true;
-      else if ('webkitPreservesPitch' in audio) audio.webkitPreservesPitch = true;
-      audio.hidden = false;
-      const download = byId('speechTtsDownload');
-      if (download) {
-        download.href = state.ttsAudioUrl;
-        download.hidden = false;
-      }
-      state.ttsRunning = false;
-      updateTtsProgressPercent(0, 'صدای فارسی آمادهٔ پخش است.');
-      setStatus('speechTtsStatus', 'صدای فارسی ساخته شد؛ در حال پخش…', 'ready');
-      updateTtsControls();
-      try {
-        const playback = audio.play();
-        if (playback && typeof playback.catch === 'function') playback.catch(() => {
-          if (session !== state.ttsSession) return;
-          state.ttsRunning = false;
-          setStatus('speechTtsStatus', 'صدا آماده شد؛ اگر پخش خودکار انجام نشد، دکمهٔ پخش فایل را بزنید.', 'ready');
-          updateTtsControls();
-        });
-      } catch (_) {
-        setStatus('speechTtsStatus', 'صدا آماده شد؛ برای پخش، کنترل فایل صوتی را بزنید.', 'ready');
-      }
+      playWavBuffer(message.wav, session, 'صدای فارسیِ آفلاین eSpeak NG');
     };
     worker.onerror = event => {
       if (session !== state.ttsSession) return;
@@ -978,6 +1246,149 @@
       pitch: Number((byId('speechPitch') || {}).value || 1)
     });
     updateTtsControls();
+  }
+
+  function startPiperSpeech(text, session, selected) {
+    state.ttsPreparing = true;
+    state.ttsRunning = false;
+    state.ttsSynthesisRate = Number((byId('speechRate') || {}).value || 1);
+    const chunks = speechChunks(text, 240);
+    state.ttsChunks = chunks;
+    state.ttsChunkIndex = 0;
+    setStatus('speechTtsStatus', 'در حال آماده‌سازی مدل صدای عصبی روی همین دستگاه؛ بار اول ممکن است کمی طول بکشد…', 'busy');
+    updateTtsProgress(0, chunks.length, 'در حال بارگذاری مدل محلی Piper…');
+
+    let worker;
+    try {
+      worker = new Worker(new URL('./speech-vendor/piper/piper-worker.mjs', document.baseURI), {
+        type: 'module',
+        name: 'persian-neural-tts-offline'
+      });
+    } catch (error) {
+      state.ttsPreparing = false;
+      setStatus('speechTtsStatus', 'ساخت Worker صدای عصبی ممکن نشد؛ برنامه را از localhost در مرورگر به‌روز اجرا کنید.', 'error');
+      updateTtsControls();
+      console.warn('Could not create the offline Piper speech worker:', error);
+      return;
+    }
+
+    state.piperWorker = worker;
+    worker.onmessage = event => {
+      if (session !== state.ttsSession) return;
+      const message = event.data || {};
+      if (message.requestId !== session) return;
+      if (message.type === 'progress') {
+        const total = Math.max(1, Number(message.total) || chunks.length);
+        const done = Math.max(0, Math.min(total, Number(message.done) || 0));
+        updateTtsProgress(done, total, message.message || 'در حال ساخت گفتار عصبی روی همین دستگاه…');
+        setStatus('speechTtsStatus', message.message || 'در حال ساخت گفتار عصبی روی همین دستگاه…', 'busy');
+        return;
+      }
+      if (message.type === 'error') {
+        worker.terminate();
+        if (state.piperWorker === worker) state.piperWorker = null;
+        state.ttsPreparing = false;
+        state.ttsRunning = false;
+        setStatus('speechTtsStatus', `ساخت صدای عصبی ناموفق بود: ${message.message || 'خطای مدل محلی'}`, 'error');
+        updateTtsProgress(0, chunks.length, 'تولید صدای عصبی ناموفق بود.');
+        updateTtsControls();
+        console.warn('Offline Persian neural speech synthesis failed:', message.message);
+        return;
+      }
+      if (message.type !== 'complete' || !(message.wav instanceof ArrayBuffer)) return;
+      worker.terminate();
+      if (state.piperWorker === worker) state.piperWorker = null;
+      state.ttsPreparing = false;
+      state.ttsChunks = [];
+      state.ttsChunkIndex = 0;
+      playWavBuffer(message.wav, session, 'صدای عصبی فارسی Piper');
+    };
+    worker.onerror = event => {
+      if (session !== state.ttsSession) return;
+      worker.terminate();
+      if (state.piperWorker === worker) state.piperWorker = null;
+      state.ttsPreparing = false;
+      state.ttsRunning = false;
+      setStatus('speechTtsStatus', 'موتور WASM یا مدل صدای عصبی بارگذاری نشد؛ فایل‌های برنامه را کامل نگه دارید و صفحه را تازه کنید.', 'error');
+      updateTtsControls();
+      console.warn('Offline Persian neural speech worker failed:', event && event.message);
+    };
+
+    worker.postMessage({
+      type: 'synthesize',
+      requestId: session,
+      voiceId: selected.id,
+      chunks,
+      rate: state.ttsSynthesisRate
+    });
+    updateTtsControls();
+  }
+
+  function playWavBuffer(wav, session, voiceLabel) {
+    const audio = byId('speechTtsAudio');
+    if (!audio) {
+      state.ttsRunning = false;
+      setStatus('speechTtsStatus', 'پخش‌کنندهٔ صدای فارسی در صفحه پیدا نشد.', 'error');
+      updateTtsControls();
+      return;
+    }
+
+    if (state.ttsAudioUrl) URL.revokeObjectURL(state.ttsAudioUrl);
+    state.ttsAudioUrl = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+    audio.onplay = () => {
+      if (session !== state.ttsSession) return;
+      state.ttsRunning = true;
+      setStatus('speechTtsStatus', `در حال پخش ${voiceLabel}…`, 'listening');
+      updateTtsControls();
+    };
+    audio.onpause = () => {
+      if (session !== state.ttsSession || audio.ended) return;
+      state.ttsRunning = false;
+      setStatus('speechTtsStatus', 'خوانش مکث شده است؛ برای ادامه از کنترل پخش استفاده کنید.', 'busy');
+      updateTtsControls();
+    };
+    audio.ontimeupdate = () => {
+      if (session !== state.ttsSession || !Number.isFinite(audio.duration) || audio.duration <= 0) return;
+      updateTtsProgressPercent(audio.currentTime / audio.duration * 100, `در حال پخش ${voiceLabel}…`);
+    };
+    audio.onended = () => {
+      if (session !== state.ttsSession) return;
+      state.ttsRunning = false;
+      updateTtsProgressPercent(100, 'خواندن متن به پایان رسید.');
+      setStatus('speechTtsStatus', 'خواندن کامل شد؛ فایل WAV محلی برای پخش دوباره یا دریافت آماده است.', 'ready');
+      updateTtsControls();
+    };
+    audio.onerror = () => {
+      if (session !== state.ttsSession) return;
+      state.ttsRunning = false;
+      setStatus('speechTtsStatus', 'فایل WAV ساخته شد، اما مرورگر نتوانست آن را پخش کند؛ از کنترل فایل یا دریافت استفاده کنید.', 'error');
+      updateTtsControls();
+    };
+    audio.src = state.ttsAudioUrl;
+    audio.playbackRate = 1;
+    if ('preservesPitch' in audio) audio.preservesPitch = true;
+    else if ('webkitPreservesPitch' in audio) audio.webkitPreservesPitch = true;
+    audio.hidden = false;
+    const download = byId('speechTtsDownload');
+    if (download) {
+      download.href = state.ttsAudioUrl;
+      download.hidden = false;
+    }
+    state.ttsRunning = false;
+    updateTtsProgressPercent(0, 'صدای فارسی آمادهٔ پخش است.');
+    setStatus('speechTtsStatus', `${voiceLabel} ساخته شد؛ در حال پخش…`, 'ready');
+    updateTtsControls();
+    try {
+      const playback = audio.play();
+      if (playback && typeof playback.catch === 'function') playback.catch(() => {
+        if (session !== state.ttsSession) return;
+        state.ttsRunning = false;
+        setStatus('speechTtsStatus', 'صدا آماده شد؛ اگر پخش خودکار انجام نشد، دکمهٔ پخش فایل را بزنید.', 'ready');
+        updateTtsControls();
+      });
+    } catch (_) {
+      setStatus('speechTtsStatus', 'صدا آماده شد؛ برای پخش، کنترل فایل صوتی را بزنید.', 'ready');
+    }
   }
 
   function speakNextChunk(session, voice) {
@@ -1061,6 +1472,10 @@
     if (state.ttsWorker) {
       try { state.ttsWorker.terminate(); } catch (_) { /* no-op */ }
       state.ttsWorker = null;
+    }
+    if (state.piperWorker) {
+      try { state.piperWorker.terminate(); } catch (_) { /* no-op */ }
+      state.piperWorker = null;
     }
     if (window.speechSynthesis) {
       try { window.speechSynthesis.cancel(); } catch (_) { /* no-op */ }

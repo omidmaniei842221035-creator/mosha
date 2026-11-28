@@ -197,6 +197,102 @@ function normalizePronunciationInput(value) {
     .trim();
 }
 
+function normalizeProsodyWord(value) {
+  return normalizePronunciationText(value)
+    .replace(/\p{M}/gu, '')
+    .replace(/\u200c/gu, '')
+    .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '')
+    .toLocaleLowerCase();
+}
+
+function prosodyWordTokens(value) {
+  return String(value || '').split(/\s+/u)
+    .map(raw => ({ raw, key: normalizeProsodyWord(raw) }))
+    .filter(token => token.key);
+}
+
+function containsProsodyWordSequence(words, phrase) {
+  const target = prosodyWordTokens(phrase).map(token => token.key);
+  if (!target.length || target.length > words.length) return false;
+  for (let index = 0; index <= words.length - target.length; index++) {
+    if (target.every((word, offset) => words[index + offset].key === word)) return true;
+  }
+  return false;
+}
+
+const TINY_AVA_NUMBER_WORDS = new Set([
+  'صفر', 'یک', 'دو', 'سه', 'چهار', 'پنج', 'شش', 'هفت', 'هشت', 'نه', 'ده', 'یازده', 'دوازده',
+  'سیزده', 'چهارده', 'پانزده', 'شانزده', 'هفده', 'هجده', 'نوزده', 'بیست', 'سی', 'چهل', 'پنجاه',
+  'شصت', 'هفتاد', 'هشتاد', 'نود', 'صد', 'یکصد', 'دویست', 'سیصد', 'چهارصد', 'پانصد', 'ششصد',
+  'هفتصد', 'هشتصد', 'نهصد', 'هزار', 'میلیون', 'میلیارد', 'تریلیون', 'کوادریلیون', 'منفی', 'ممیز',
+  'اول', 'دوم', 'سوم', 'چهارم', 'پنجم', 'نیم'
+].map(normalizeProsodyWord));
+const TINY_AVA_PRIORITY_WORDS = new Set([
+  'مهم', 'توجه', 'نکته', 'نتیجه', 'جمع‌بندی', 'خلاصه', 'ضروری', 'حتماً', 'پیشنهاد', 'توصیه',
+  'مبلغ', 'هزینه', 'تاریخ', 'ساعت', 'شماره', 'تأیید', 'سررسید', 'تومان', 'ریال', 'درصد', 'دلار', 'یورو', 'به‌ویژه', 'اصل', 'اصلی'
+].map(normalizeProsodyWord));
+const TINY_AVA_NAME_TITLES = new Set(['آقای', 'خانم', 'جناب', 'سرکار', 'دکتر', 'مهندس', 'استاد', 'پروفسور'].map(normalizeProsodyWord));
+const TINY_AVA_EMPATHY_WORDS = new Set(['متأسفم', 'متاسفم', 'تسلیت', 'نگران', 'دشواری', 'سختی', 'همدردی', 'درکتان', 'می‌فهمم', 'کنارتان'].map(normalizeProsodyWord));
+const TINY_AVA_WARM_WORDS = new Set(['ممنون', 'ممنونم', 'ممنونید', 'متشکرم', 'متشکریم', 'سپاس', 'سپاسگزارم', 'مرسی', 'تبریک', 'آفرین', 'خوشحال', 'خوشحالم', 'خوشحالیم', 'مبارک'].map(normalizeProsodyWord));
+const TINY_AVA_FORMAL_WORDS = new Set(['لطفاً', 'لطفا', 'خواهشمندم', 'خواهشمند', 'احتراماً', 'احتراما', 'جناب', 'سرکار', 'بدین‌وسیله', 'استحضار', 'رسماً', 'رسمی'].map(normalizeProsodyWord));
+const TINY_AVA_SURPRISE_WORDS = new Set(['عجب', 'واقعاً', 'واقعا', 'حیرت', 'باورنکردنی'].map(normalizeProsodyWord));
+const TINY_AVA_ASSERTIVE_WORDS = new Set(['مهم', 'توجه', 'ضروری', 'حتماً', 'حتما', 'باید', 'توصیه', 'پیشنهاد', 'نتیجه', 'نکته'].map(normalizeProsodyWord));
+const TINY_AVA_CONVERSATIONAL_WORDS = new Set(['سلام', 'خب', 'باشه', 'راستش', 'دوست', 'عزیز'].map(normalizeProsodyWord));
+
+/** Find conservative word/phrase emphasis targets from text only; never classifies a speaker's emotional state. */
+function tinyAvaEmphasisWordIndexes(value, manualPhrases = []) {
+  const normalized = normalizeTinyAvaText(value);
+  const words = prosodyWordTokens(normalized);
+  const emphasis = new Set();
+  for (let index = 0; index < words.length; index++) {
+    const key = words[index].key;
+    if (TINY_AVA_NUMBER_WORDS.has(key) || TINY_AVA_PRIORITY_WORDS.has(key)) emphasis.add(index);
+    if (!TINY_AVA_NAME_TITLES.has(key)) continue;
+    let nameIndex = index + 1;
+    while (nameIndex < words.length && TINY_AVA_NAME_TITLES.has(words[nameIndex].key)) nameIndex++;
+    for (let offset = 0; offset < 2 && nameIndex + offset < words.length; offset++) {
+      if (/[.!?؟؛;،,]$/u.test(words[nameIndex + offset - 1]?.raw || words[index].raw)) break;
+      emphasis.add(nameIndex + offset);
+    }
+  }
+  for (const phrase of manualPhrases) {
+    const target = prosodyWordTokens(normalizeTinyAvaText(phrase)).map(token => token.key);
+    if (!target.length || target.length > words.length) continue;
+    for (let index = 0; index <= words.length - target.length; index++) {
+      if (target.every((word, offset) => words[index + offset].key === word)) {
+        for (let offset = 0; offset < target.length; offset++) emphasis.add(index + offset);
+      }
+    }
+  }
+  return Array.from(emphasis).sort((left, right) => left - right);
+}
+
+function contextualTinyAvaProsody(text) {
+  const words = prosodyWordTokens(text);
+  const keys = words.map(token => token.key);
+  const hasAny = set => keys.some(key => set.has(key));
+  const hasPhrase = phrase => containsProsodyWordSequence(words, phrase);
+  if (hasAny(TINY_AVA_EMPATHY_WORDS) || hasPhrase('درکتان می‌کنم') || hasPhrase('می‌فهمم چه')) {
+    return { speedScale: 0.97, pitchShiftOffset: -0.01, pitchRangeScale: 0.95 };
+  }
+  if (hasAny(TINY_AVA_FORMAL_WORDS) || hasPhrase('با سلام') || hasPhrase('با احترام')) {
+    return { speedScale: 0.985, pitchShiftOffset: -0.003, pitchRangeScale: 0.96 };
+  }
+  if (hasAny(TINY_AVA_SURPRISE_WORDS) || hasPhrase('چه جالب') || hasPhrase('چه عالی')) {
+    return { speedScale: 1.005, pitchShiftOffset: 0.008, pitchRangeScale: 1.05 };
+  }
+  if (hasAny(TINY_AVA_WARM_WORDS)) {
+    return { speedScale: 1.005, pitchShiftOffset: 0.006, pitchRangeScale: 1.04 };
+  }
+  if (hasAny(TINY_AVA_ASSERTIVE_WORDS) || hasPhrase('پیشنهاد می‌کنم') || hasPhrase('بهتر است')) {
+    return { speedScale: 0.99, pitchShiftOffset: 0.004, pitchRangeScale: 1.03 };
+  }
+  if (hasAny(TINY_AVA_CONVERSATIONAL_WORDS)) {
+    return { speedScale: 1.005, pitchShiftOffset: 0.003, pitchRangeScale: 1.02 };
+  }
+  return { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+}
+
 /** Parse local, user-edited `word = preferred pronunciation` entries. This is a pronunciation dictionary, not model fine-tuning. */
 export function parsePersianPronunciationLexicon(value, maxEntries = 64) {
   const entries = new Map();
@@ -236,7 +332,11 @@ export function applyPersianPronunciationLexicon(value, entries = []) {
   const applyEntries = segment => segment.replace(matcher, (_match, boundary, spokenSource) =>
     `${boundary}${lookup.get(normalizePronunciationText(spokenSource).toLocaleLowerCase()) || spokenSource}`);
   while ((cue = cues.exec(text))) {
-    output += applyEntries(text.slice(cursor, cue.index)) + cue[0];
+    const emphasisCue = cue[0].match(/^(\[\[(?:تأکید|emphasis)\s*:\s*)([\s\S]*?)(\]\])$/iu);
+    const preservedCue = emphasisCue
+      ? `${emphasisCue[1]}${applyEntries(emphasisCue[2])}${emphasisCue[3]}`
+      : cue[0];
+    output += applyEntries(text.slice(cursor, cue.index)) + preservedCue;
     cursor = cue.index + cue[0].length;
   }
   return output + applyEntries(text.slice(cursor));
@@ -247,26 +347,24 @@ const TINY_AVA_PAUSE_AFTER_SENTENCE = Object.freeze({
 });
 const TINY_AVA_CLOSING_PUNCTUATION = new Set(['"', "'", ')', ']', '}', '»', '”', '’']);
 
-function tinyAvaSentenceProsody(text, baseOptions = {}) {
+function tinyAvaSentenceProsody(text, baseOptions = {}, autoTextProsody = true) {
   const value = String(text || '').trimEnd();
-  const normalized = normalizePronunciationText(value);
   const last = Array.from(value).reverse().find(character => !TINY_AVA_CLOSING_PUNCTUATION.has(character)) || '';
-  const contour = last === '?' || last === '؟'
+  const terminal = last === '?' || last === '؟'
     ? { speedScale: 0.985, pitchShiftOffset: 0.018, pitchRangeScale: 1.08 }
     : last === '!'
       ? { speedScale: 1.025, pitchShiftOffset: 0.025, pitchRangeScale: 1.12 }
       : last === '…'
         ? { speedScale: 0.94, pitchShiftOffset: -0.018, pitchRangeScale: 0.94 }
-        : /(?:تبریک|آفرین|ممنون|سپاس|خوشحال)/u.test(normalized)
-          ? { speedScale: 1.01, pitchShiftOffset: 0.012, pitchRangeScale: 1.06 }
-          : /(?:متاسفم|متأسفم|تسلیت|نگران|دشواری|سختی)/u.test(normalized)
-            ? { speedScale: 0.95, pitchShiftOffset: -0.018, pitchRangeScale: 0.92 }
-            : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+        : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+  const context = autoTextProsody
+    ? contextualTinyAvaProsody(value)
+    : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
   return {
     ...baseOptions,
-    speedScale: (Number(baseOptions.speedScale) || 1) * contour.speedScale,
-    pitchShiftOffset: (Number(baseOptions.pitchShiftOffset) || 0) + contour.pitchShiftOffset,
-    pitchRangeScale: (Number(baseOptions.pitchRangeScale) || 1) * contour.pitchRangeScale
+    speedScale: (Number(baseOptions.speedScale) || 1) * terminal.speedScale * context.speedScale,
+    pitchShiftOffset: (Number(baseOptions.pitchShiftOffset) || 0) + terminal.pitchShiftOffset + context.pitchShiftOffset,
+    pitchRangeScale: (Number(baseOptions.pitchRangeScale) || 1) * terminal.pitchRangeScale * context.pitchRangeScale
   };
 }
 
@@ -278,15 +376,23 @@ function tinyAvaSegment(text, pauseAfterMs, options) {
     pauseBeforeMs: 0,
     speedScale: Number(options.speedScale) || 1,
     pitchShiftOffset: Number(options.pitchShiftOffset) || 0,
-    pitchRangeScale: Number(options.pitchRangeScale) || 1
+    pitchRangeScale: Number(options.pitchRangeScale) || 1,
+    emphasisWordIndexes: Array.isArray(options.emphasisWordIndexes) ? options.emphasisWordIndexes : []
   };
 }
 
-function appendBoundedTinyAvaSegment(output, rawText, pauseAfterMs, options, maxChars) {
+function appendBoundedTinyAvaSegment(output, rawText, pauseAfterMs, options, maxChars, manualEmphasisPhrases = []) {
   const text = String(rawText || '').trim();
   if (!text) return;
+  const append = (part, pause) => {
+    const segmentOptions = {
+      ...options,
+      emphasisWordIndexes: tinyAvaEmphasisWordIndexes(part, manualEmphasisPhrases)
+    };
+    output.push(tinyAvaSegment(part, pause, segmentOptions));
+  };
   if (text.length <= maxChars) {
-    output.push(tinyAvaSegment(text, pauseAfterMs, options));
+    append(text, pauseAfterMs);
     return;
   }
   const words = text.match(/\S+/gu) || [];
@@ -294,7 +400,7 @@ function appendBoundedTinyAvaSegment(output, rawText, pauseAfterMs, options, max
   const flush = pause => {
     const part = fragment.trim();
     if (!part) return;
-    output.push(tinyAvaSegment(part, pause, options));
+    append(part, pause);
     fragment = '';
   };
   for (const word of words) {
@@ -305,16 +411,16 @@ function appendBoundedTinyAvaSegment(output, rawText, pauseAfterMs, options, max
       for (let offset = 0; offset < characters.length; offset += maxChars) {
         const part = characters.slice(offset, offset + maxChars).join('');
         const finalPart = offset + maxChars >= characters.length;
-        output.push(tinyAvaSegment(part, finalPart ? pauseAfterMs : 30, options));
+        append(part, finalPart ? pauseAfterMs : 30);
       }
       continue;
     }
     fragment = fragment ? `${fragment} ${word}` : word;
   }
-  if (fragment) output.push(tinyAvaSegment(fragment, pauseAfterMs, options));
+  if (fragment) append(fragment.trim(), pauseAfterMs);
 }
 
-function splitTinyAvaLine(value, options, maxChars) {
+function splitTinyAvaLine(value, options, maxChars, autoTextProsody, manualEmphasisPhrases) {
   const line = normalizeTinyAvaText(value);
   if (!line) return [];
   const output = [];
@@ -334,20 +440,24 @@ function splitTinyAvaLine(value, options, maxChars) {
       buffer += line[next];
       next++;
     }
-    appendBoundedTinyAvaSegment(output, buffer, pause, tinyAvaSentenceProsody(buffer, options), maxChars);
+    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody);
+    appendBoundedTinyAvaSegment(output, buffer, pause, sentenceOptions, maxChars, manualEmphasisPhrases);
     buffer = '';
     index = next - 1;
   }
-  if (buffer.trim()) appendBoundedTinyAvaSegment(output, buffer, 0, options, maxChars);
+  if (buffer.trim()) {
+    const sentenceOptions = tinyAvaSentenceProsody(buffer, options, autoTextProsody);
+    appendBoundedTinyAvaSegment(output, buffer, 0, sentenceOptions, maxChars, manualEmphasisPhrases);
+  }
   return output;
 }
 
-function splitTinyAvaPlainText(value, options, maxChars) {
+function splitTinyAvaPlainText(value, options, maxChars, autoTextProsody, manualEmphasisPhrases) {
   const paragraphs = String(value || '').replace(/\r\n?/gu, '\n').split(/\n[ \t]*\n+/u);
   const output = [];
   for (let index = 0; index < paragraphs.length; index++) {
     const paragraph = paragraphs[index].replace(/\n+/gu, ' ');
-    const paragraphSegments = splitTinyAvaLine(paragraph, options, maxChars);
+    const paragraphSegments = splitTinyAvaLine(paragraph, options, maxChars, autoTextProsody, manualEmphasisPhrases);
     if (!paragraphSegments.length) continue;
     const hasFollowingParagraph = paragraphs.slice(index + 1).some(block => block.trim());
     if (hasFollowingParagraph) {
@@ -359,14 +469,20 @@ function splitTinyAvaPlainText(value, options, maxChars) {
   return output;
 }
 
-/** Parse punctuation timing and optional inline performance cues for local tiny-ava output. */
-export function segmentTinyAvaText(value, maxChars = 180) {
+/** Parse punctuation timing, conservative text prosody, emphasis, and optional inline cues for local tiny-ava output. */
+export function segmentTinyAvaText(value, maxChars = 180, prosodyOptions = {}) {
   const limit = Math.max(48, Math.min(360, Math.trunc(Number(maxChars) || 180)));
+  const autoTextProsody = !prosodyOptions || prosodyOptions.autoTextProsody !== false;
+  const manualEmphasisPhrases = [];
+  const sourceText = String(value || '').replace(/\[\[(?:تأکید|emphasis)\s*:\s*([\s\S]*?)\]\]/giu, (_cue, phrase) => {
+    if (String(phrase || '').trim()) manualEmphasisPhrases.push(String(phrase).trim());
+    return phrase;
+  });
   const output = [];
   let pendingLeadingPause = 0;
   let cursor = 0;
   const appendSpeech = (text, options = {}) => {
-    const segments = splitTinyAvaPlainText(text, options, limit);
+    const segments = splitTinyAvaPlainText(text, options, limit, autoTextProsody, manualEmphasisPhrases);
     if (!segments.length) return;
     const previous = output[output.length - 1];
     if (previous && previous.pauseAfterMs === 0) previous.pauseAfterMs = 55;
@@ -385,8 +501,8 @@ export function segmentTinyAvaText(value, maxChars = 180) {
 
   const markers = /\[\[([\s\S]*?)\]\]/gu;
   let match;
-  while ((match = markers.exec(String(value || '')))) {
-    appendSpeech(String(value || '').slice(cursor, match.index));
+  while ((match = markers.exec(sourceText))) {
+    appendSpeech(sourceText.slice(cursor, match.index));
     const cue = String(match[1] || '').trim();
     const normalizedCue = cue.toLowerCase();
     const pauseCues = {
@@ -411,7 +527,7 @@ export function segmentTinyAvaText(value, maxChars = 180) {
     }
     cursor = markers.lastIndex;
   }
-  appendSpeech(String(value || '').slice(cursor));
+  appendSpeech(sourceText.slice(cursor));
   if (pendingLeadingPause && output.length) output[0].pauseBeforeMs = pendingLeadingPause;
   return output;
 }
@@ -472,38 +588,42 @@ function splitLanguageSpans(text) {
   return spans;
 }
 
-function fallbackEnglishWords(text) {
+function fallbackEnglishWords(text, emphasisWordIndexes = new Set()) {
   const result = [];
   const letterPhones = { a: 'æ', b: 'b', c: 'k', d: 'd', e: 'ɛ', f: 'f', g: 'ɡ', h: 'h', i: 'ɪ', j: 'dʒ', k: 'k', l: 'l', m: 'm', n: 'n', o: 'ɑː', p: 'p', q: 'k', r: 'ɹ', s: 's', t: 't', u: 'ʌ', v: 'v', w: 'w', x: 'k s', y: 'j', z: 'z' };
   const digraphs = [['tion', ['ʃ', 'ə', 'n']], ['ch', ['tʃ']], ['sh', ['ʃ']], ['th', ['θ']], ['ph', ['f']], ['ng', ['ŋ']], ['ee', ['iː']], ['ea', ['iː']], ['oo', ['uː']]];
-  for (const wordMatch of String(text).matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?/gu)) {
-    const word = wordMatch[0].toLowerCase();
-    const phones = [];
-    for (let index = 0; index < word.length;) {
-      const rest = word.slice(index);
-      const match = digraphs.find(([spelling]) => rest.startsWith(spelling));
-      if (match) {
-        phones.push(...match[1].map(phone => [phone, 0]));
-        index += match[0].length;
-        continue;
+  const inputWords = String(text || '').trim().split(/\s+/u).filter(Boolean);
+  for (const [wordIndex, inputWord] of inputWords.entries()) {
+    for (const wordMatch of inputWord.matchAll(/[A-Za-z]+(?:'[A-Za-z]+)?/gu)) {
+      const word = wordMatch[0].toLowerCase();
+      const phones = [];
+      for (let index = 0; index < word.length;) {
+        const rest = word.slice(index);
+        const match = digraphs.find(([spelling]) => rest.startsWith(spelling));
+        if (match) {
+          phones.push(...match[1].map(phone => [phone, 0]));
+          index += match[0].length;
+          continue;
+        }
+        const mapped = letterPhones[word[index]];
+        if (mapped) phones.push(...mapped.split(' ').map(phone => [phone, 0]));
+        index++;
       }
-      const mapped = letterPhones[word[index]];
-      if (mapped) phones.push(...mapped.split(' ').map(phone => [phone, 0]));
-      index++;
-    }
-    if (phones.length) {
-      for (let index = phones.length - 1; index >= 0; index--) {
-        if (VOWELS.has(phones[index][0])) { phones[index][1] = 1; break; }
+      if (phones.length) {
+        for (let index = phones.length - 1; index >= 0; index--) {
+          if (VOWELS.has(phones[index][0])) { phones[index][1] = emphasisWordIndexes.has(wordIndex) ? 2 : 1; break; }
+        }
+        result.push(phones);
       }
-      result.push(phones);
     }
   }
   return result;
 }
 
-function repr1ToWords(value) {
+function repr1ToWords(value, emphasisWordIndexes = new Set()) {
   const words = [];
-  for (const rawWord of String(value || '').trim().split(/\s+/u)) {
+  const inputWords = String(value || '').trim().split(/\s+/u);
+  for (const [wordIndex, rawWord] of inputWords.entries()) {
     if (!rawWord) continue;
     const match = rawWord.match(/^(.*?)-(ye|e)$/u);
     let stem = match && match[1] ? match[1].replace(/-/gu, '') : rawWord.replace(/-/gu, '');
@@ -520,7 +640,7 @@ function repr1ToWords(value) {
       if (ipa) phones.push([ipa, 0]);
     }
     for (let index = phones.length - 1; index >= 0; index--) {
-      if (VOWELS.has(phones[index][0])) { phones[index][1] = 1; break; }
+      if (VOWELS.has(phones[index][0])) { phones[index][1] = emphasisWordIndexes.has(wordIndex) ? 2 : 1; break; }
     }
     if (ezafe) {
       for (const character of ezafe) {
@@ -596,6 +716,9 @@ export async function phonemizeTinyAvaSentence(sentence, encoderSession, decoder
   const normalized = ensureSentenceMark(normalizeTinyAvaText(sentence), options.continuation ? ',' : '.');
   const symbols = ['<bos>'];
   const stress = [0];
+  const emphasisWordIndexes = new Set((Array.isArray(options.emphasisWordIndexes) ? options.emphasisWordIndexes : [])
+    .map(Number).filter(index => Number.isSafeInteger(index) && index >= 0));
+  let wordIndex = 0;
   const punctuationParts = splitPunctuation(normalized);
   for (const [isPunctuation, value] of punctuationParts) {
     if (isPunctuation) {
@@ -606,10 +729,14 @@ export async function phonemizeTinyAvaSentence(sentence, encoderSession, decoder
       continue;
     }
     for (const [language, span] of splitLanguageSpans(value)) {
+      const inputWords = span.trim().split(/\s+/u).filter(Boolean);
+      const localEmphasis = new Set(inputWords.map((_word, index) => emphasisWordIndexes.has(wordIndex + index) ? index : -1)
+        .filter(index => index >= 0));
       const words = language === 'fa'
-        ? repr1ToWords(await runPersianG2P(span, encoderSession, decoderSession, ort))
-        : fallbackEnglishWords(span);
+        ? repr1ToWords(await runPersianG2P(span, encoderSession, decoderSession, ort), localEmphasis)
+        : fallbackEnglishWords(span, localEmphasis);
       ensurePhoneWordsSeparate(symbols, stress, words);
+      wordIndex += inputWords.length;
     }
   }
   symbols.push('<eos>');
@@ -619,8 +746,10 @@ export async function phonemizeTinyAvaSentence(sentence, encoderSession, decoder
   return { symbols, ids: symbols.map(symbol => SYMBOL_TO_ID[symbol]), stress };
 }
 
-export function tinyAvaPhonemeIdsFromRepr1(value) {
-  const words = repr1ToWords(value);
+export function tinyAvaPhonemeIdsFromRepr1(value, options = {}) {
+  const emphasisWordIndexes = new Set((Array.isArray(options.emphasisWordIndexes) ? options.emphasisWordIndexes : [])
+    .map(Number).filter(index => Number.isSafeInteger(index) && index >= 0));
+  const words = repr1ToWords(value, emphasisWordIndexes);
   const symbols = ['<bos>'];
   const stress = [0];
   ensurePhoneWordsSeparate(symbols, stress, words);

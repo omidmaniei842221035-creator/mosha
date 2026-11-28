@@ -168,8 +168,9 @@
                 <button type="button" data-tinyava-cue="[[مکث بلند]]">+ مکث بلند</button>
                 <button type="button" data-tinyava-cue="[[نفس]]">+ نفس‌نمای نرم</button>
                 <button id="speechTinyAvaStretch" type="button">کشیده‌خوانیِ انتخاب‌شده</button>
+                <button id="speechTinyAvaEmphasis" type="button">تأکیدِ عبارتِ انتخاب‌شده</button>
               </div>
-              <small class="speech-cue-note">«آه/اوه/هوم» به‌صورت واژه گفته می‌شوند. [[نفس]] فقط یک نفس‌نمای نویزیِ نرم و مکث کوتاه می‌سازد، نه صدای ضبط‌شدهٔ انسان. [[کشیده:واژه]] عبارت را با سرعت کمتر می‌خواند.</small>
+              <small class="speech-cue-note">عددها و چند واژهٔ مهم به‌طور ملایم تأکید می‌شوند؛ برای نام یا عبارت خاص آن را انتخاب کنید و «تأکید» را بزنید. «آه/اوه/هوم» واژه‌اند؛ [[نفس]] فقط نویز نرم و مکث کوتاه است، نه صدای ضبط‌شده. [[کشیده:واژه]] عبارت را کندتر می‌خواند.</small>
             </div>
             <div class="speech-meta"><span id="speechTtsChars">۰ نویسه</span><span id="speechTtsWords">۰ واژه</span></div>
 
@@ -223,7 +224,7 @@
                   <label for="speechTtsPauseScale">میزان مکث‌ها <b id="speechTtsPauseScaleValue">۱٫۰۰×</b></label>
                   <input id="speechTtsPauseScale" type="range" min="0.6" max="1.8" step="0.1" value="1" aria-label="میزان مکث‌ها در خوانش tiny-ava" disabled>
                 </div>
-                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند عبارت روشنِ سپاس/تبریک یا همدلی، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این راهنمای واژگانی محدود است، نه احساسِ آموزش‌دیده یا تشخیص حالت انسان. presetهای شاد/غمگین/عصبانی نیز فقط نگاشت تقریبی‌اند. برای نجوا، خنده و تنفس واقعی، مدل فعلی آموزش ندیده است.</div>
+                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند الگوی متنیِ روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این تحلیل قاعده‌محور و تقریبی است، نه درک قطعی احساس یا نیت. presetهای شاد/غمگین/عصبانی نیز فقط نگاشت تقریبی‌اند. برای نجوا، خنده و تنفس واقعی، مدل فعلی آموزش ندیده است.</div>
               </div>
             </div>
 
@@ -253,7 +254,7 @@
             </details>
             <details class="speech-details">
               <summary>تلفظ، لحن و مجوز صداها</summary>
-              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی استفاده کنید؛ عدد، ساعت و درصد نیز پیش از واج‌شناسی به واژه تبدیل می‌شوند. ویرگول و مکث‌های درون جمله داخل همان نوبت مدل خوانده می‌شوند تا پیوند واژه‌ها قطع نشود؛ پایان جمله، پرسش، تعجب و بند خالی مکث می‌سازد و حالت خودکار با پرسش، تعجب و چند عبارت روشنِ سپاس/تبریک یا همدلی آهنگ جمله را اندکی تنظیم می‌کند؛ این برداشت واژگانی محدود است، نه تشخیص احساس قطعی. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
+              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی یا واژه‌نامهٔ محلی استفاده کنید؛ عدد، ساعت و درصد پیش از واج‌شناسی به واژه تبدیل و عددها، مبالغ، چند کلیدواژه و نام پس از عنوان‌هایی مثل «آقای» یا «دکتر» با تأکید ملایم مشخص می‌شوند. برای هر عبارت دلخواه، آن را انتخاب و دکمهٔ «تأکید» را بزنید یا از [[تأکید:عبارت]] استفاده کنید. ویرگول و مکث‌های درون جمله داخل همان نوبت مدل خوانده می‌شوند تا پیوند واژه‌ها قطع نشود؛ پایان جمله، پرسش، تعجب و بند خالی مکث می‌سازد و حالت خودکار با نشانه‌گذاری و چند الگوی روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچکی می‌دهد؛ این تحلیل آفلاین و قاعده‌محور است، نه درک قطعی احساس یا نیت. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[تأکید:عبارت]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
             </details>
           </section>
         </div>
@@ -353,6 +354,7 @@
       button.addEventListener('click', () => insertTinyAvaCue(button.getAttribute('data-tinyava-cue') || ''));
     });
     byButton('speechTinyAvaStretch', wrapTinyAvaStretchCue);
+    byButton('speechTinyAvaEmphasis', wrapTinyAvaEmphasisCue);
 
     if (!state.voiceEventsBound && window.speechSynthesis) {
       const synth = window.speechSynthesis;
@@ -1661,9 +1663,33 @@
     input.focus();
   }
 
+  function wrapTinyAvaEmphasisCue() {
+    const input = byId('speechTtsInput');
+    if (!input) return;
+    const start = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
+    const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+    const selected = input.value.slice(start, end);
+    const selectedText = selected.trim();
+    if (!selectedText) {
+      notify('برای تأکید، ابتدا واژه یا عبارت موردنظر را در متن انتخاب کنید.');
+      return;
+    }
+    const leading = selected.match(/^\s*/u)?.[0] || '';
+    const trailing = selected.match(/\s*$/u)?.[0] || '';
+    const tagged = `${leading}[[تأکید:${selectedText}]]${trailing}`;
+    if (input.value.length - (end - start) + tagged.length > (Number(input.maxLength) || 8000)) {
+      notify('متن برای افزودن نشانهٔ تأکید به سقف طول رسیده است.');
+      return;
+    }
+    input.setRangeText(tagged, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }
+
   function stripTinyAvaCues(text) {
     return String(text || '')
       .replace(/\[\[(?:مکث کوتاه|مکث بلند|مکث|نفس|مکث تنفسی|pause(?::(?:short|long))?|breath)\]\]/giu, ', ')
+      .replace(/\[\[(?:تأکید|emphasis)\s*:\s*([\s\S]*?)\]\]/giu, '$1')
       .replace(/\[\[(?:کشیده|stretch)\s*:\s*([\s\S]*?)\]\]/giu, '$1')
       .replace(/\[\[(آه|اوه|هوم)\]\]/gu, '$1')
       .replace(/\[\[sigh\]\]/giu, 'آه')

@@ -14,11 +14,16 @@ test('keeps intra-sentence punctuation inside a single tiny-ava model segment', 
   assert.match(core, /paragraphs\.slice\(index \+ 1\)/u);
   assert.match(worker, /pitchShiftOffset/u);
   assert.match(worker, /segment\.pitchShiftOffset/u);
+  assert.match(worker, /emphasisWordIndexes:\s*segment\.emphasisWordIndexes/u);
+  assert.match(core, /emphasisWordIndexes/u);
 });
 
 test('offers sentence-aware prosody and a locally saved pronunciation lexicon', () => {
   assert.match(tool, /value="auto">خوانش خودکار و جمله‌محور/u);
   assert.match(tool, /id="speechTtsLexicon"/u);
+  assert.match(tool, /id="speechTinyAvaEmphasis"/u);
+  assert.match(tool, /wrapTinyAvaEmphasisCue/u);
+  assert.match(tool, /\[\[تأکید:\$\{selectedText\}\]\]/u);
   assert.match(tool, /localStorage\.setItem\(LEXICON_KEY, raw\)/u);
   assert.match(tool, /core\.applyPersianPronunciationLexicon\(rawText, entries\)/u);
   assert.match(core, /not model fine-tuning/u);
@@ -36,7 +41,7 @@ test('prefers the local neural Persian voice unless an explicit voice choice was
 test('uses punctuation-sensitive pauses for Piper and advances the offline shell cache', () => {
   assert.match(piperWorker, /pauseAfterPiperChunk/u);
   assert.match(piperWorker, /cleanChunks\.slice\(0, -1\)\.map\(pauseAfterPiperChunk\)/u);
-  assert.match(serviceWorker, /shahr-advisor-pc-v42/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v43/u);
   for (const path of ['speech-tool.js', 'speech-vendor/tiny-ava/core.mjs', 'speech-vendor/piper/piper-worker.mjs', 'speech-vendor/piper/core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline shell`);
   }

@@ -114,7 +114,8 @@ function createBreathWave(durationMs, seed) {
 }
 
 async function synthesize(message) {
-  const { requestId, voiceId, settings } = message;
+  const { requestId, voiceId } = message;
+  const settings = message.settings && typeof message.settings === 'object' ? message.settings : {};
   const selectedVoice = TINY_AVA_VOICES[voiceId];
   const text = typeof message.text === 'string'
     ? message.text
@@ -123,7 +124,7 @@ async function synthesize(message) {
     throw new Error('درخواست گفتار tiny-ava معتبر نیست.');
   }
   await loadModel(requestId);
-  const segments = segmentTinyAvaText(text, 180);
+  const segments = segmentTinyAvaText(text, 180, { autoTextProsody: !settings.style || settings.style === 'auto' });
   if (!segments.length) throw new Error('متنی برای خواندن باقی نماند.');
   const speed = clamp(settings && settings.speed, 0.7, 1.4, 1);
   const pitchShift = clamp(settings && settings.pitchShift, -0.25, 0.25, 0);
@@ -144,7 +145,8 @@ async function synthesize(message) {
     const hasFollowing = segments.slice(index + 1).some(item => item.type === 'speech');
     const hasHardEnding = /[.!?؟…]["')\]»”’}]*$/u.test(segment.text);
     const phonemes = await phonemizeTinyAvaSentence(segment.text, encoderSession, decoderSession, ort, {
-      continuation: hasFollowing && !hasHardEnding
+      continuation: hasFollowing && !hasHardEnding,
+      emphasisWordIndexes: segment.emphasisWordIndexes
     });
     if (!phonemes) continue;
     if (phonemes.ids.length > MAX_TOKENS) throw new Error('یک جمله از حد پشتیبانی مدل طولانی‌تر است؛ آن را کوتاه‌تر کنید.');

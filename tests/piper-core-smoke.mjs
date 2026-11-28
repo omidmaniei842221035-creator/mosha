@@ -37,4 +37,10 @@ assert.equal(view.getUint32(40, true), (3 + Math.round(22050 * 10 / 1000) + 1) *
 assert.equal(wav.byteLength, 44 + view.getUint32(40, true));
 assert.equal(view.getInt16(46, true), -32768);
 assert.equal(view.getInt16(48, true), 32767);
-console.log(`Piper WAV/core smoke test passed (${wav.byteLength} bytes, 22050 Hz WAV).`);
+const variablePauseWav = createPiperWavBuffer(
+  [Float32Array.of(0), Float32Array.of(0), Float32Array.of(0)], 22050, [10, 20]
+);
+assert.equal(new DataView(variablePauseWav).getUint32(40, true), (3 + 221 + 441) * 2);
+const scalarCapWav = createPiperWavBuffer([Float32Array.of(0), Float32Array.of(0)], 22050, 2000);
+assert.equal(new DataView(scalarCapWav).getUint32(40, true), (2 + 22050) * 2);
+console.log(`Piper WAV/core smoke test passed (${wav.byteLength} bytes, 22050 Hz WAV; variable pauses supported, scalar cap unchanged).`);

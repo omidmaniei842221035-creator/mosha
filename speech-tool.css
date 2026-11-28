@@ -103,4 +103,20 @@
 .speech-piper-progress{grid-column:1/-1}.speech-piper-progress[hidden]{display:none}.speech-piper-progress>div{display:flex;justify-content:space-between;gap:8px;margin-bottom:5px;color:#426552;font-size:9.5px}.speech-piper-progress>div b{color:#145A39}
 .speech-piper-progress>i{display:block;height:7px;overflow:hidden;border-radius:9px;background:#DCECE2}.speech-piper-progress>i span{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,#1E8A5A,#73C995);transition:width .2s}
 @media(max-width:500px){.speech-neural-download{grid-template-columns:1fr}.speech-neural-download .btn{width:100%;justify-content:center}}
+.speech-tiny-ava-controls{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:10px;border:1px solid #E8DFF2;border-radius:12px;background:#FAF7FD}
+.speech-tiny-ava-controls[hidden]{display:none}
+.speech-tiny-ava-controls .speech-setting{margin:0;background:#fff}
+.speech-tiny-ava-controls select{width:100%;min-height:38px;font-size:11px}
+.speech-tiny-ava-controls label small{color:var(--ink3);font-size:9px;font-weight:500}
+.speech-style-caveat{grid-column:1/-1;color:#62546E;font-size:9.5px;line-height:1.8}
+.speech-tiny-ava-cues{margin:8px 0 4px;padding:10px;border:1px solid #E6DDF0;border-radius:12px;background:#FBF9FD}
+.speech-tiny-ava-cues[hidden]{display:none}
+.speech-cue-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px}
+.speech-cue-head b{color:#4F3C62;font-size:10.5px}
+.speech-cue-head small,.speech-cue-note{color:#695E73;font-size:9px;line-height:1.8}
+.speech-cue-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.speech-cue-buttons button{min-height:30px;padding:5px 8px;border:1px solid #D9CBE8;border-radius:9px;background:#fff;color:#49365C;font:inherit;font-size:9.5px;font-weight:700;cursor:pointer}
+.speech-cue-buttons button:hover{border-color:#9E7BB9;background:#F6F0FA}
+.speech-cue-note{display:block;margin-top:7px}
+@media(max-width:500px){.speech-tiny-ava-controls{grid-template-columns:1fr;padding:8px}.speech-cue-head{display:block}.speech-cue-head small{display:block;margin-top:2px}.speech-cue-buttons button{flex:1 1 calc(50% - 6px)}}
 @media(prefers-reduced-motion:reduce){.speech-page *, .speech-page *:before,.speech-page *:after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}

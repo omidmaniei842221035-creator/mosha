@@ -1,0 +1,37 @@
+THIRD-PARTY SOFTWARE, MODEL, AND DATA NOTICES — TINY-AVA V2
+
+The application contains integration code adapted from the tiny-ava v2 browser worker and downloads the ONNX model assets below only after the user explicitly selects a tiny-ava voice. The weight files are not redistributed in the application ZIP.
+
+VOICE/DATA PROVENANCE
+- The upstream tiny-ava v2 README describes Parisa as a Persian female voice whose source is “Chatterbox Run C”. No separate license for that source is asserted here beyond the published tiny-ava model-weights license.
+- The upstream tiny-ava v2 README describes Mana as a “real studio human” Persian male voice and credits the Mana-TTS dataset, including Mana-TTS HIGH, under CC0-1.0: https://huggingface.co/datasets/MahtaFetrat/Mana-TTS
+- This application discloses Mana's human recording provenance; it does not claim that Mana is wholly synthetic or that the speaker has no real-world source. No celebrity or named-person imitation is intended. The upstream license/provenance statements are recorded here; this repository has not independently verified speaker identity or consent beyond them.
+
+1. tiny-ava v2 reference code
+   Upstream: https://github.com/mallahyari/tiny-ava/tree/v2.0.0
+   Pinned source commit: 47820fbc425817afd30bdf1015ba829214bafa3b
+   License: Apache License 2.0; full text in LICENSE-APACHE-2.0.txt.
+   Local integration changes include origin-local ONNX Runtime loading, IndexedDB model storage, input normalization, digit/time expansion and app-specific controls.
+
+2. tiny-ava v2 ONNX model weights
+   Source: https://huggingface.co/mehdi-hf/tiny-ava
+   Pinned revision: d1064f5a0b57a04b6d540588e0824e6ce259a7ab
+   File: onnx/tiny-ava-v2.onnx
+   Size: 36,034,045 bytes
+   SHA-256: ee49d4f51882cd7acbcd28ce7ace570e47897018d03db410b6b883bcc818bed2
+   License: Creative Commons Attribution 4.0 International (CC BY 4.0):
+   https://creativecommons.org/licenses/by/4.0/
+   Required attribution: “Powered by tiny-ava (Mehdi Allahyari / OncillaAI)” and a link to the model source above.
+
+3. Persian G2P ONNX model weights
+   Source: https://huggingface.co/spaces/mehdi-hf/tiny-ava-demo
+   Pinned revision: 27c0e1c7bef79ead8761dad4caaa9313371adde6
+   Files: assets/g2p/g2p_encoder.onnx (3,459,754 bytes) and assets/g2p/g2p_decoder.onnx (5,305,604 bytes)
+   SHA-256 values: aa22db88525e657f1c1d44ba55ebb1e7e08d8693dcc6a5a22a5c053b518a600f and 8d6635098a78d9c3c6af4fb0d01f7b6a5f3d4396fc10b0e61959b384c237a4bc respectively.
+   License: MIT, as identified by the upstream Persian G2P project:
+   https://huggingface.co/mehdi-hf/persian-g2p-tiny
+
+4. ONNX Runtime Web
+   The existing local runtime under ../piper/ is reused; its MIT license and bundled notices are listed in ../piper/THIRD-PARTY-NOTICES.txt. No CDN runtime is loaded by this component.
+
+Attribution in the app: “Powered by tiny-ava (Mehdi Allahyari / OncillaAI)” — https://huggingface.co/mehdi-hf/tiny-ava

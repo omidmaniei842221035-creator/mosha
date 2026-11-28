@@ -25,7 +25,13 @@
       sha256: '37dfae43c82ee38ca9e6aac4ffef76a74d6b282ccbc397b27761f35d355c99ba'
     }
   };
-  const DEFAULT_PIPER_VOICE = 'fa_IR-amir-medium';
+  const TINY_AVA_VOICE_PREFIX = 'tinyava:';
+  const TINY_AVA_MODEL_BYTES = 44799403;
+  const TINY_AVA_VOICES = {
+    parisa: { title: 'پریسا · صدای زنانه', modelIndex: 0 },
+    mana: { title: 'مانا · صدای مردانهٔ استودیویی', modelIndex: 2 }
+  };
+  const DEFAULT_TINY_AVA_VOICE = 'parisa';
   const state = {
     recognitionCtor: null,
     recognitionStatus: 'checking',
@@ -44,6 +50,7 @@
     ttsPreparing: false,
     ttsWorker: null,
     piperWorker: null,
+    tinyAvaWorker: null,
     piperVoiceIds: new Set(),
     piperAvailabilityChecked: false,
     piperDownloading: false,
@@ -51,6 +58,12 @@
     piperDownloadAbort: null,
     piperDownloadVoiceId: '',
     piperAvailabilityRequest: 0,
+    tinyAvaInstalled: false,
+    tinyAvaAvailabilityChecked: false,
+    tinyAvaAvailabilityRequest: 0,
+    tinyAvaDownloading: false,
+    tinyAvaDownloadCancelable: false,
+    tinyAvaDownloadAbort: null,
     ttsAudioUrl: '',
     ttsSynthesisRate: 1,
     ttsChunks: [],
@@ -143,6 +156,19 @@
 
             <label class="speech-live-label" for="speechTtsInput">متن برای خواندن <small>متن در حافظهٔ مرورگر ذخیره نمی‌شود</small></label>
             <textarea id="speechTtsInput" class="speech-textarea tts" dir="rtl" lang="fa" maxlength="8000" placeholder="متن فارسی را اینجا بنویسید یا از دیکته منتقل کنید…">درود. این نمونه با صدای عصبی فارسی ساخته می‌شود؛ مدل را یک‌بار دریافت کنید و بعد آفلاین بخوانید.</textarea>
+            <div id="speechTinyAvaCueBar" class="speech-tiny-ava-cues" hidden aria-label="نشانه‌های اجرای tiny-ava">
+              <div class="speech-cue-head"><b>نشانه‌های اجرا</b><small>برای tiny-ava؛ هر نشانه را می‌توانید در متن قرار دهید.</small></div>
+              <div class="speech-cue-buttons">
+                <button type="button" data-tinyava-cue="آه، ">+ آه</button>
+                <button type="button" data-tinyava-cue="اوه، ">+ اوه</button>
+                <button type="button" data-tinyava-cue="هوم، ">+ هوم</button>
+                <button type="button" data-tinyava-cue="[[مکث کوتاه]]">+ مکث کوتاه</button>
+                <button type="button" data-tinyava-cue="[[مکث بلند]]">+ مکث بلند</button>
+                <button type="button" data-tinyava-cue="[[نفس]]">+ نفس‌نمای نرم</button>
+                <button id="speechTinyAvaStretch" type="button">کشیده‌خوانیِ انتخاب‌شده</button>
+              </div>
+              <small class="speech-cue-note">«آه/اوه/هوم» به‌صورت واژه گفته می‌شوند. [[نفس]] فقط یک نفس‌نمای نویزیِ نرم و مکث کوتاه می‌سازد، نه صدای ضبط‌شدهٔ انسان. [[کشیده:واژه]] عبارت را با سرعت کمتر می‌خواند.</small>
+            </div>
             <div class="speech-meta"><span id="speechTtsChars">۰ نویسه</span><span id="speechTtsWords">۰ واژه</span></div>
 
             <div class="speech-settings">
@@ -151,7 +177,12 @@
                 <select id="speechVoice" class="inp" disabled aria-label="انتخاب صدای فارسی محلی"><option value="">در حال آماده‌سازی صداهای محلی…</option></select>
               </div>
               <div class="speech-neural-download">
-                <div class="speech-neural-copy"><b>صدای عصبیِ فارسی</b><small>برای هر صدا یک دریافت اولیهٔ حدود ۶۱ MiB؛ پس از آن کاملاً آفلاین و فقط روی همین دستگاه.</small></div>
+                <div class="speech-neural-copy"><b>مدل گفتار عصبی</b><small id="speechNeuralInfo">برای پریسا و مانا یک مدل مشترک حدود ۴۳ MiB؛ پس از دریافت یک‌باره، خوانش کاملاً آفلاین است.</small></div>
+                <button id="speechTinyAvaInstall" class="btn ghost" type="button" hidden>${icon('download', 15)} دریافت مدل tiny-ava</button>
+                <div id="speechTinyAvaDownloadWrap" class="speech-piper-progress" hidden>
+                  <div><span id="speechTinyAvaDownloadText">در حال دریافت مدل tiny-ava…</span><b id="speechTinyAvaDownloadPercent">۰٪</b></div>
+                  <i><span id="speechTinyAvaDownloadBar"></span></i>
+                </div>
                 <button id="speechPiperInstall" class="btn ghost" type="button" hidden>${icon('download', 15)} دریافت مدل صدا</button>
                 <div id="speechPiperDownloadWrap" class="speech-piper-progress" hidden>
                   <div><span id="speechPiperDownloadText">در حال دریافت مدل…</span><b id="speechPiperDownloadPercent">۰٪</b></div>
@@ -165,6 +196,31 @@
               <div class="speech-setting">
                 <label for="speechPitch">زیر و بمی صدا <b id="speechPitchValue">۱٫۰۰</b></label>
                 <input id="speechPitch" type="range" min="0.8" max="1.2" step="0.05" value="1" aria-label="زیر و بمی صدا" disabled>
+              </div>
+              <div id="speechTinyAvaStyleControls" class="speech-tiny-ava-controls" hidden>
+                <div class="speech-setting">
+                  <label for="speechTtsStyle">حالت لحن <small>تقریبی، بدون تغییر واژه‌ها</small></label>
+                  <select id="speechTtsStyle" class="inp" disabled aria-label="حالت لحن تقریبی tiny-ava">
+                    <option value="conversational">مکالمه‌ای و طبیعی · پیش‌فرض</option>
+                    <option value="formal">رسمی و شمرده</option>
+                    <option value="calm">آرام و ملایم</option>
+                    <option value="happy">شاد و صمیمی</option>
+                    <option value="sad">غمگین و آرام</option>
+                    <option value="angry">عصبانی و قاطع</option>
+                    <option value="excited">هیجان‌زده</option>
+                    <option value="storytelling">روایت‌گر</option>
+                    <option value="lively">پرانرژی</option>
+                  </select>
+                </div>
+                <div class="speech-setting">
+                  <label for="speechTtsExpressiveness">شدت آهنگ <b id="speechTtsExpressivenessValue">۱٫۰۵</b></label>
+                  <input id="speechTtsExpressiveness" type="range" min="0.7" max="1.4" step="0.05" value="1.05" aria-label="شدت تقریبی آهنگ tiny-ava" disabled>
+                </div>
+                <div class="speech-setting">
+                  <label for="speechTtsPauseScale">میزان مکث‌ها <b id="speechTtsPauseScaleValue">۱٫۰۰×</b></label>
+                  <input id="speechTtsPauseScale" type="range" min="0.6" max="1.8" step="0.1" value="1" aria-label="میزان مکث‌ها در خوانش tiny-ava" disabled>
+                </div>
+                <div class="speech-style-caveat">حس‌هایی مثل خشم و شادی برچسبِ آموزش‌دیدهٔ مدل نیستند؛ فقط سرعت، زیر و بمی، گسترهٔ آهنگ و مکث تقریبی تنظیم می‌شود. نجوا، خنده و تنفس واقعی از مدل قابل تولید نیست.</div>
               </div>
             </div>
 
@@ -180,7 +236,11 @@
             </div>
             <audio id="speechTtsAudio" class="speech-audio" controls preload="metadata" hidden aria-label="پخش صدای فارسی تولیدشده"></audio>
             <a id="speechTtsDownload" class="btn ghost speech-audio-download" download="گفتار-فارسی.wav" hidden>${icon('download', 15)} دریافت فایل WAV</a>
-            <div id="speechTtsHint" class="speech-note warn">صدای عصبیِ Piper در این دستگاه نصب نشده است. پس از دریافت یک‌بارهٔ مدل حدود ۶۱ MiB، پردازش و پخش گفتار کاملاً محلی می‌شود؛ اگر مدل را نخواهید، صدای eSpeak NG جایگزین است اما مصنوعی‌تر شنیده می‌شود.</div>
+            <div id="speechTtsHint" class="speech-note warn">صدای عصبی tiny-ava هنوز در این دستگاه نصب نشده است؛ برای پریسا و مانا یک‌بار حدود ۴۳ MiB دریافت کنید. سپس گفتار روی همین دستگاه و بدون اینترنت ساخته می‌شود.</div>
+            <details class="speech-details">
+              <summary>تلفظ، لحن و مجوز صداها</summary>
+              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی استفاده کنید؛ عدد، ساعت و درصد نیز پیش از واج‌شناسی به واژه تبدیل می‌شوند. نشانه‌گذاری و خط‌ جدید مکث تقریبی می‌سازد. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
+            </details>
           </section>
         </div>
 
@@ -200,6 +260,7 @@
     updateTtsCounters();
     updateVoiceList();
     refreshStoredPiperVoices();
+    refreshStoredTinyAvaModel();
     refreshRecognitionSupport();
     [250, 900, 2200].forEach(delay => window.setTimeout(() => {
       if (!state.localPersianVoices.length) updateVoiceList();
@@ -235,12 +296,17 @@
     byButton('speechResume', resumeSpeech);
     byButton('speechTtsStop', () => stopSpeech(true));
     byButton('speechPiperInstall', installOrRemovePiperVoice);
+    byButton('speechTinyAvaInstall', installOrRemoveTinyAvaModel);
 
     const voice = byId('speechVoice');
     if (voice) voice.addEventListener('change', () => {
       if (state.piperWorker && !state.ttsPreparing && !state.ttsRunning) {
         try { state.piperWorker.terminate(); } catch (_) { /* no-op */ }
         state.piperWorker = null;
+      }
+      if (state.tinyAvaWorker && !state.ttsPreparing && !state.ttsRunning) {
+        try { state.tinyAvaWorker.terminate(); } catch (_) { /* no-op */ }
+        state.tinyAvaWorker = null;
       }
       saveSpeechPreferences();
       updateVoiceGuidance();
@@ -258,6 +324,17 @@
     });
     const pitch = byId('speechPitch');
     if (pitch) pitch.addEventListener('input', () => { updateRangeLabels(); saveSpeechPreferences(); });
+    const style = byId('speechTtsStyle');
+    if (style) style.addEventListener('change', () => { saveSpeechPreferences(); updateTtsControls(); });
+    const expressiveness = byId('speechTtsExpressiveness');
+    if (expressiveness) expressiveness.addEventListener('input', () => { updateRangeLabels(); saveSpeechPreferences(); });
+    const pauseScale = byId('speechTtsPauseScale');
+    if (pauseScale) pauseScale.addEventListener('input', () => { updateRangeLabels(); saveSpeechPreferences(); });
+    const cueBar = byId('speechTinyAvaCueBar');
+    if (cueBar) cueBar.querySelectorAll('[data-tinyava-cue]').forEach(button => {
+      button.addEventListener('click', () => insertTinyAvaCue(button.getAttribute('data-tinyava-cue') || ''));
+    });
+    byButton('speechTinyAvaStretch', wrapTinyAvaStretchCue);
 
     if (!state.voiceEventsBound && window.speechSynthesis) {
       const synth = window.speechSynthesis;
@@ -694,7 +771,7 @@
     const synth = window.speechSynthesis;
     const canUseBundledVoice = typeof window.Worker === 'function' &&
       typeof window.Audio === 'function' && typeof window.URL.createObjectURL === 'function';
-    const canUsePiperVoice = canUseBundledVoice && typeof window.indexedDB !== 'undefined' &&
+    const canUseNeuralVoice = canUseBundledVoice && typeof window.indexedDB !== 'undefined' &&
       typeof window.WebAssembly !== 'undefined' && !!(window.crypto && window.crypto.subtle);
 
     state.voices = synth && typeof synth.getVoices === 'function' ? (synth.getVoices() || []) : [];
@@ -702,13 +779,24 @@
     state.localPersianVoices = persianVoices.filter(voice => voice.localService === true);
     select.replaceChildren();
 
+    const tinyAvaGroup = document.createElement('optgroup');
+    tinyAvaGroup.label = 'tiny-ava v2 · پریسا و مانا، یک مدل مشترک و آفلاین';
+    Object.entries(TINY_AVA_VOICES).forEach(([id, voice]) => {
+      const option = document.createElement('option');
+      option.value = `${TINY_AVA_VOICE_PREFIX}${id}`;
+      option.textContent = `${voice.title} — دریافت اولیهٔ مشترک حدود ۴۳ MiB`;
+      option.disabled = !canUseNeuralVoice;
+      tinyAvaGroup.appendChild(option);
+    });
+    select.appendChild(tinyAvaGroup);
+
     const piperGroup = document.createElement('optgroup');
-    piperGroup.label = 'صدای عصبی فارسی · دریافت اولیه و سپس آفلاین';
+    piperGroup.label = 'صدای عصبی Piper · هر مدل جداگانه دریافت می‌شود';
     Object.entries(PIPER_VOICES).forEach(([id, model]) => {
       const option = document.createElement('option');
       option.value = `${PIPER_VOICE_PREFIX}${id}`;
       option.textContent = `${model.title} — حدود ۶۱ MiB`;
-      option.disabled = !canUsePiperVoice;
+      option.disabled = !canUseNeuralVoice;
       piperGroup.appendChild(option);
     });
     select.appendChild(piperGroup);
@@ -734,31 +822,38 @@
       select.appendChild(systemGroup);
     }
 
-    select.disabled = !canUsePiperVoice && !canUseBundledVoice && !state.localPersianVoices.length;
+    select.disabled = !canUseNeuralVoice && !canUseBundledVoice && !state.localPersianVoices.length;
     const prefs = readSpeechPreferences();
     const savedNativeVoice = state.localPersianVoices.find(voice => voice.voiceURI === prefs.voiceURI);
     const savedBundledVoice = canUseBundledVoice && prefs.voiceURI === BUNDLED_VOICE_ID;
+    const savedTinyAvaId = String(prefs.voiceURI || '').startsWith(TINY_AVA_VOICE_PREFIX)
+      ? String(prefs.voiceURI).slice(TINY_AVA_VOICE_PREFIX.length)
+      : '';
+    const savedTinyAvaExists = canUseNeuralVoice && Object.prototype.hasOwnProperty.call(TINY_AVA_VOICES, savedTinyAvaId);
     const savedPiperId = String(prefs.voiceURI || '').startsWith(PIPER_VOICE_PREFIX)
       ? String(prefs.voiceURI).slice(PIPER_VOICE_PREFIX.length)
       : '';
-    const savedPiperExists = canUsePiperVoice && Object.prototype.hasOwnProperty.call(PIPER_VOICES, savedPiperId);
+    const savedPiperExists = canUseNeuralVoice && Object.prototype.hasOwnProperty.call(PIPER_VOICES, savedPiperId);
     const defaultValue = savedNativeVoice
       ? savedNativeVoice.voiceURI
-      : savedPiperExists
-        ? `${PIPER_VOICE_PREFIX}${savedPiperId}`
-        : savedBundledVoice
-          ? BUNDLED_VOICE_ID
-          : canUsePiperVoice
-            ? `${PIPER_VOICE_PREFIX}${DEFAULT_PIPER_VOICE}`
-            : canUseBundledVoice
-              ? BUNDLED_VOICE_ID
-              : state.localPersianVoices.length
-                ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
-                : '';
+      : savedTinyAvaExists
+        ? `${TINY_AVA_VOICE_PREFIX}${savedTinyAvaId}`
+        : savedPiperExists
+          ? `${PIPER_VOICE_PREFIX}${savedPiperId}`
+          : savedBundledVoice
+            ? BUNDLED_VOICE_ID
+            : canUseNeuralVoice
+              ? `${TINY_AVA_VOICE_PREFIX}${DEFAULT_TINY_AVA_VOICE}`
+              : canUseBundledVoice
+                ? BUNDLED_VOICE_ID
+                : state.localPersianVoices.length
+                  ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
+                  : '';
     select.value = defaultValue;
 
     updateVoiceGuidance();
     updatePiperDownloadControls();
+    updateTinyAvaDownloadControls();
     updateTtsControls();
   }
 
@@ -781,11 +876,250 @@
     });
   }
 
+  function refreshStoredTinyAvaModel() {
+    const request = ++state.tinyAvaAvailabilityRequest;
+    import('./speech-vendor/tiny-ava/store.mjs').then(store => store.hasStoredTinyAvaModel()).then(installed => {
+      if (request !== state.tinyAvaAvailabilityRequest) return;
+      state.tinyAvaInstalled = !!installed;
+      state.tinyAvaAvailabilityChecked = true;
+      updateVoiceGuidance();
+      updateTinyAvaDownloadControls();
+      updateTtsControls();
+    }).catch(error => {
+      if (request !== state.tinyAvaAvailabilityRequest) return;
+      state.tinyAvaInstalled = false;
+      state.tinyAvaAvailabilityChecked = false;
+      updateVoiceGuidance(error);
+      updateTinyAvaDownloadControls();
+      updateTtsControls();
+      console.warn('Could not inspect the local tiny-ava model store:', error);
+    });
+  }
+
+  function updateTinyAvaDownloadControls() {
+    const button = byId('speechTinyAvaInstall');
+    const progress = byId('speechTinyAvaDownloadWrap');
+    const selected = getSelectedVoice();
+    const isTinyAva = !!(selected && selected.type === 'tiny-ava');
+    if (button) {
+      button.hidden = !isTinyAva;
+      button.disabled = !isTinyAva || (state.ttsPreparing || state.ttsRunning) ||
+        (state.tinyAvaDownloading && !state.tinyAvaDownloadCancelable) ||
+        (!state.tinyAvaDownloading && !state.tinyAvaInstalled && !state.tinyAvaAvailabilityChecked);
+      button.innerHTML = state.tinyAvaDownloading
+        ? state.tinyAvaDownloadCancelable
+          ? `${icon('x', 15)} لغو دریافت`
+          : 'در حال بررسی و ذخیرهٔ مدل…'
+        : state.tinyAvaInstalled
+          ? `${icon('trash', 15)} حذف مدل tiny-ava`
+          : `${icon('download', 15)} دریافت مدل tiny-ava (حدود ۴۳ MiB)`;
+    }
+    if (progress) progress.hidden = !state.tinyAvaDownloading;
+  }
+
+  function updateTinyAvaDownloadProgress(received, total, label) {
+    const wrap = byId('speechTinyAvaDownloadWrap');
+    const text = byId('speechTinyAvaDownloadText');
+    const percentText = byId('speechTinyAvaDownloadPercent');
+    const bar = byId('speechTinyAvaDownloadBar');
+    const totalBytes = Number(total) || TINY_AVA_MODEL_BYTES;
+    const value = totalBytes > 0 ? Math.max(0, Math.min(100, Math.round(Number(received) / totalBytes * 100))) : 0;
+    if (wrap) wrap.hidden = !state.tinyAvaDownloading;
+    if (text) text.textContent = label || `دریافت مدل tiny-ava: ${faNumber((Number(received) / 1048576).toFixed(1))} از ${faNumber((totalBytes / 1048576).toFixed(1))} MiB`;
+    if (percentText) percentText.textContent = `${faNumber(value)}٪`;
+    if (bar) bar.style.width = `${value}%`;
+  }
+
+  async function installOrRemoveTinyAvaModel() {
+    if (state.tinyAvaDownloading) {
+      if (state.tinyAvaDownloadCancelable && state.tinyAvaDownloadAbort) state.tinyAvaDownloadAbort.abort();
+      return;
+    }
+    const selected = getSelectedVoice();
+    if (!selected || selected.type !== 'tiny-ava') return;
+    if (state.tinyAvaInstalled) {
+      if (!window.confirm('مدل مشترک پریسا و مانا از حافظهٔ محلی همین مرورگر حذف شود؟')) return;
+      stopSpeech(false);
+      try {
+        const store = await import('./speech-vendor/tiny-ava/store.mjs');
+        await store.removeStoredTinyAvaModel();
+        state.tinyAvaInstalled = false;
+        state.tinyAvaAvailabilityChecked = true;
+        setStatus('speechTtsStatus', 'مدل tiny-ava از حافظهٔ محلی حذف شد.', 'idle');
+      } catch (error) {
+        setStatus('speechTtsStatus', `حذف مدل محلی انجام نشد: ${error.message || 'خطای ذخیره‌ساز'}`, 'error');
+      }
+      updateVoiceGuidance();
+      updateTinyAvaDownloadControls();
+      updateTtsControls();
+      return;
+    }
+    await downloadTinyAvaModel();
+  }
+
+  async function downloadTinyAvaModel() {
+    if (state.tinyAvaDownloading) return;
+    if (navigator.onLine === false) {
+      setStatus('speechTtsStatus', 'برای دریافت نخستین مدل tiny-ava اتصال اینترنت لازم است؛ پس از ذخیره، گفتار کاملاً آفلاین است.', 'error');
+      return;
+    }
+
+    const controller = new AbortController();
+    state.tinyAvaDownloading = true;
+    state.tinyAvaDownloadCancelable = true;
+    state.tinyAvaDownloadAbort = controller;
+    updateTinyAvaDownloadControls();
+    updateTtsControls();
+    setStatus('speechTtsStatus', 'در حال دریافت مدل گفتار و واج‌شناس فارسی؛ هیچ متن گفتاری ارسال نمی‌شود…', 'busy');
+    updateTinyAvaDownloadProgress(0, TINY_AVA_MODEL_BYTES, 'در حال آماده‌سازی دریافت حدود ۴۳ MiB…');
+    let receivedTotal = 0;
+    let lastProgressAt = 0;
+
+    try {
+      if (navigator.storage && typeof navigator.storage.estimate === 'function') {
+        const estimate = await navigator.storage.estimate();
+        const free = Number(estimate.quota) - Number(estimate.usage || 0);
+        if (Number.isFinite(free) && free > 0 && free < TINY_AVA_MODEL_BYTES * 1.12) {
+          throw new Error('فضای آزاد ذخیره‌ساز مرورگر برای مدل مشترک پریسا و مانا (حدود ۴۳ MiB) کافی نیست؛ فضای سایت را آزاد کنید.');
+        }
+        if (typeof navigator.storage.persist === 'function') {
+          try { await navigator.storage.persist(); } catch (_) { /* persistence is optional */ }
+        }
+      }
+
+      const tinyAva = await import('./speech-vendor/tiny-ava/core.mjs');
+      const integrity = await import('./speech-vendor/piper/core.mjs');
+      const assets = {};
+      for (const asset of tinyAva.TINY_AVA_ASSETS) {
+        if (controller.signal.aborted) {
+          const abortError = new Error('دریافت مدل با انتخاب شما متوقف شد.');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
+        setStatus('speechTtsStatus', `در حال دریافت ${asset.label}…`, 'busy');
+        const response = await fetch(asset.url, { signal: controller.signal, cache: 'no-store' });
+        if (!response.ok) throw new Error(`دریافت ${asset.label} ناموفق بود (HTTP ${response.status}).`);
+        const total = Number(response.headers.get('content-length')) || asset.bytes;
+        let received = 0;
+        const chunks = [];
+        if (response.body && typeof response.body.getReader === 'function') {
+          const reader = response.body.getReader();
+          while (true) {
+            const item = await reader.read();
+            if (item.done) break;
+            if (!item.value) continue;
+            received += item.value.byteLength;
+            if (received > asset.bytes) {
+              controller.abort();
+              throw new Error(`${asset.label} از اندازهٔ نسخهٔ معتبر بزرگ‌تر شد؛ دریافت متوقف شد.`);
+            }
+            chunks.push(item.value);
+            const now = Date.now();
+            if (now - lastProgressAt > 120 || received >= total) {
+              updateTinyAvaDownloadProgress(receivedTotal + received, TINY_AVA_MODEL_BYTES,
+                `${asset.label}: ${faNumber(((receivedTotal + received) / 1048576).toFixed(1))} از ${faNumber((TINY_AVA_MODEL_BYTES / 1048576).toFixed(1))} MiB`);
+              lastProgressAt = now;
+            }
+          }
+        } else {
+          const blob = await response.blob();
+          received = blob.size;
+          chunks.push(blob);
+        }
+        if (controller.signal.aborted) {
+          const abortError = new Error('دریافت مدل با انتخاب شما متوقف شد.');
+          abortError.name = 'AbortError';
+          throw abortError;
+        }
+        if (received !== asset.bytes) {
+          throw new Error(`اندازهٔ ${asset.label} با نسخهٔ معتبر هم‌خوان نیست (${faNumber(received)} بایت)؛ دانلود ناقص ذخیره نشد.`);
+        }
+        state.tinyAvaDownloadCancelable = false;
+        updateTinyAvaDownloadControls();
+        const blob = new Blob(chunks, { type: 'application/octet-stream' });
+        updateTinyAvaDownloadProgress(receivedTotal + received, TINY_AVA_MODEL_BYTES, `بررسی SHA-256: ${asset.label}…`);
+        const actualSha256 = await integrity.sha256Hex(blob);
+        if (actualSha256 !== asset.sha256) {
+          throw new Error(`SHA-256 ${asset.label} با نسخهٔ منتشرشده هم‌خوان نیست؛ فایل ذخیره نشد.`);
+        }
+        assets[asset.id] = blob;
+        receivedTotal += received;
+        state.tinyAvaDownloadCancelable = true;
+        updateTinyAvaDownloadControls();
+      }
+
+      state.tinyAvaDownloadCancelable = false;
+      updateTinyAvaDownloadControls();
+      const record = {
+        id: tinyAva.TINY_AVA_MODEL_ID,
+        version: tinyAva.TINY_AVA_VERSION,
+        tts: assets.tts,
+        g2pEncoder: assets.g2pEncoder,
+        g2pDecoder: assets.g2pDecoder,
+        bytes: receivedTotal,
+        assetSha256: Object.fromEntries(tinyAva.TINY_AVA_ASSETS.map(asset => [asset.id, asset.sha256])),
+        savedAt: Date.now()
+      };
+      const store = await import('./speech-vendor/tiny-ava/store.mjs');
+      await store.saveStoredTinyAvaModel(record);
+      state.tinyAvaInstalled = true;
+      state.tinyAvaAvailabilityChecked = true;
+      updateTinyAvaDownloadProgress(TINY_AVA_MODEL_BYTES, TINY_AVA_MODEL_BYTES, 'مدل مشترک پریسا و مانا بررسی و در حافظهٔ محلی ذخیره شد.');
+      setStatus('speechTtsStatus', 'مدل tiny-ava نصب شد؛ پریسا و مانا از این پس بدون اینترنت روی همین دستگاه کار می‌کنند.', 'ready');
+      notify('مدل مشترک پریسا و مانا ذخیره شد؛ استفادهٔ بعدی آفلاین است.');
+    } catch (error) {
+      if (error && error.name === 'AbortError') {
+        setStatus('speechTtsStatus', 'دریافت tiny-ava متوقف شد؛ فایل ناقص ذخیره نشد.', 'idle');
+        updateTinyAvaDownloadProgress(0, TINY_AVA_MODEL_BYTES, 'دریافت مدل متوقف شد.');
+      } else {
+        const message = error && error.name === 'TypeError'
+          ? 'اتصال به میزبان مدل برقرار نشد؛ اینترنت و اجازهٔ CORS میزبان را بررسی کنید.'
+          : error && error.message ? error.message : 'خطای شبکه یا ذخیره‌ساز';
+        setStatus('speechTtsStatus', `دریافت مدل tiny-ava ناموفق بود: ${message}`, 'error');
+        updateTinyAvaDownloadProgress(0, TINY_AVA_MODEL_BYTES, 'دریافت مدل ناموفق بود.');
+        console.warn('tiny-ava Persian voice download failed:', error);
+      }
+    } finally {
+      state.tinyAvaDownloading = false;
+      state.tinyAvaDownloadCancelable = false;
+      state.tinyAvaDownloadAbort = null;
+      updateVoiceGuidance();
+      updateTinyAvaDownloadControls();
+      updateTtsControls();
+    }
+  }
+
   function updateVoiceGuidance(storageError) {
-    if (state.ttsPreparing || state.ttsRunning || state.piperDownloading) return;
+    if (state.ttsPreparing || state.ttsRunning || state.piperDownloading || state.tinyAvaDownloading) return;
     const selected = getSelectedVoice();
     const hint = byId('speechTtsHint');
+    const modelInfo = byId('speechNeuralInfo');
+    if (selected && selected.type === 'tiny-ava') {
+      const title = TINY_AVA_VOICES[selected.id].title;
+      if (modelInfo) modelInfo.textContent = 'مدل مشترک حدود ۴۳ MiB؛ منبع مانا ضبط استودیوییِ انسانی (Mana-TTS HIGH، CC0) است؛ سپس کاملاً آفلاین.';
+      if (storageError) {
+        setStatus('speechTtsStatus', 'ذخیره‌ساز پایدار مدل tiny-ava در این مرورگر در دسترس نیست.', 'error');
+        setStatus('speechTtsGuidance', 'برای نگه‌داری محلیِ مدل ۴۳ MiB به IndexedDB، Worker و WebAssembly نیاز است؛ از localhost یا HTTPS و مرورگر به‌روز استفاده کنید.', 'error');
+      } else if (!state.tinyAvaAvailabilityChecked) {
+        setStatus('speechTtsStatus', 'در حال بررسی مدل tiny-ava روی همین دستگاه…', 'busy');
+        setStatus('speechTtsGuidance', 'مدل گفتار و واج‌شناس فقط با انتخاب شما یک‌بار دریافت می‌شوند؛ بعد از ذخیره، ساخت صدا روی همین دستگاه و بدون اینترنت است.', 'warn');
+      } else if (state.tinyAvaInstalled) {
+        setStatus('speechTtsStatus', `${title} آمادهٔ گفتار آفلاین است.`, 'ready');
+        setStatus('speechTtsGuidance', 'مدل مشترک از حافظهٔ محلی بارگذاری می‌شود و متن از دستگاه خارج نمی‌شود. حالت‌های شاد، غمگین و عصبانی فقط نگاشت تقریبیِ سرعت/زیر‌وبمی‌اند؛ مکث‌ها و نشانه‌های اجرایی نیز محلی ساخته می‌شوند.', 'ok');
+      } else {
+        setStatus('speechTtsStatus', `${title} هنوز دریافت نشده است؛ دکمهٔ دریافت مدل را بزنید.`, 'idle');
+        setStatus('speechTtsGuidance', 'برای هر دو صدا یک دریافت اولیهٔ حدود ۴۳ MiB لازم است. پس از ذخیره در همین مرورگر، پریسا و مانا بدون اتصال شبکه کار می‌کنند.', 'warn');
+      }
+      if (hint) {
+        hint.dataset.state = state.tinyAvaInstalled ? 'ok' : 'warn';
+        hint.textContent = state.tinyAvaInstalled
+          ? 'tiny-ava روی همین دستگاه آماده است. اعداد و زمان‌ها پیش از واج‌شناسی به واژه تبدیل می‌شوند. حالت‌های احساسی تقریبی‌اند؛ با نشانه‌های مکث، آه/اوه/هوم و کشیده‌خوانی می‌توانید اجرای متن را دقیق‌تر هدایت کنید. نفس‌نما مصنوعی است.'
+          : 'برای پریسا و مانا یک مدل مشترک حدود ۴۳ MiB دریافت کنید. پس از آن گفتار بدون اینترنت ساخته می‌شود؛ Piper و eSpeak NG هم به‌عنوان گزینه‌های محلی باقی هستند.';
+      }
+      return;
+    }
     if (selected && selected.type === 'piper') {
+      if (modelInfo) modelInfo.textContent = 'برای هر صدای Piper یک مدل جداگانه حدود ۶۱ MiB دریافت می‌شود؛ پس از آن همان صدا کاملاً آفلاین است.';
       const title = PIPER_VOICES[selected.id].title;
       const installed = state.piperVoiceIds.has(selected.id);
       if (storageError) {
@@ -811,6 +1145,7 @@
     }
 
     if (selected && selected.type === 'bundled') {
+      if (modelInfo) modelInfo.textContent = 'eSpeak NG کم‌حجم و همراه برنامه است؛ مدل عصبیِ جداگانه‌ای دریافت نمی‌شود.';
       setStatus('speechTtsStatus', 'صدای جایگزین فارسیِ eSpeak NG همراه برنامه آماده است.', 'ready');
       setStatus('speechTtsGuidance', 'این صدا کاملاً آفلاین و کم‌حجم است، اما مصنوعی‌تر از صدای عصبی شنیده می‌شود. برای گفتار طبیعی‌تر، یکی از صداهای عصبی را دریافت کنید.', 'warn');
       if (hint) {
@@ -821,6 +1156,7 @@
     }
 
     if (selected && selected.type === 'native') {
+      if (modelInfo) modelInfo.textContent = 'این صدا بخشی از بستهٔ سیستم شماست؛ کیفیت و امکانات آن به ویندوز و مرورگر بستگی دارد.';
       setStatus('speechTtsStatus', 'صدای فارسی محلی سیستم انتخاب شده است.', 'ready');
       setStatus('speechTtsGuidance', 'کیفیت و طبیعی‌بودن به بستهٔ صدای نصب‌شده روی Windows و مرورگر بستگی دارد؛ این برنامه صدای ابری را فراخوانی نمی‌کند.', 'ok');
       if (hint) {
@@ -1024,6 +1360,12 @@
     const select = byId('speechVoice');
     if (!select || !select.value) return null;
     if (select.value === BUNDLED_VOICE_ID) return { type: 'bundled' };
+    if (select.value.startsWith(TINY_AVA_VOICE_PREFIX)) {
+      const id = select.value.slice(TINY_AVA_VOICE_PREFIX.length);
+      return Object.prototype.hasOwnProperty.call(TINY_AVA_VOICES, id)
+        ? { type: 'tiny-ava', id, installed: state.tinyAvaInstalled }
+        : null;
+    }
     if (select.value.startsWith(PIPER_VOICE_PREFIX)) {
       const id = select.value.slice(PIPER_VOICE_PREFIX.length);
       return Object.prototype.hasOwnProperty.call(PIPER_VOICES, id)
@@ -1052,28 +1394,52 @@
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
     const voiceSelect = byId('speechVoice');
+    const tinyAvaStyleControls = byId('speechTinyAvaStyleControls');
+    const tinyAvaCueBar = byId('speechTinyAvaCueBar');
+    const tinyAvaStyle = byId('speechTtsStyle');
+    const tinyAvaExpressiveness = byId('speechTtsExpressiveness');
+    const tinyAvaPauseScale = byId('speechTtsPauseScale');
     const piperReady = !selected || selected.type !== 'piper' || state.piperVoiceIds.has(selected.id);
+    const tinyAvaReady = !selected || selected.type !== 'tiny-ava' || state.tinyAvaInstalled;
+    const usesTinyAva = !!(selected && selected.type === 'tiny-ava');
 
-    if (rate) rate.disabled = !selected || state.ttsPreparing;
-    if (pitch) pitch.disabled = !selected || state.ttsPreparing || selected.type === 'piper';
-    if (speak) speak.disabled = !selected || !hasText || !piperReady || state.ttsPreparing || state.ttsRunning;
+    if (rate) rate.disabled = !selected || state.ttsPreparing || state.ttsRunning;
+    if (pitch) pitch.disabled = !selected || state.ttsPreparing || state.ttsRunning || selected.type === 'piper';
+    if (tinyAvaStyleControls) tinyAvaStyleControls.hidden = !usesTinyAva;
+    if (tinyAvaCueBar) {
+      tinyAvaCueBar.hidden = !usesTinyAva;
+      tinyAvaCueBar.querySelectorAll('button').forEach(button => {
+        button.disabled = state.ttsPreparing || state.ttsRunning;
+      });
+    }
+    if (tinyAvaStyle) tinyAvaStyle.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
+    if (tinyAvaExpressiveness) tinyAvaExpressiveness.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
+    if (tinyAvaPauseScale) tinyAvaPauseScale.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
+    if (speak) speak.disabled = !selected || !hasText || !piperReady || !tinyAvaReady || state.ttsPreparing || state.ttsRunning;
     if (pause) pause.disabled = !audioPlaying && !(nativeSpeaking && !nativePaused);
     if (resume) resume.disabled = !audioPaused && !nativePaused;
     if (stop) stop.disabled = !state.ttsPreparing && !state.ttsRunning && !nativeSpeaking && !audioReady;
     if (voiceSelect) {
       const hasSelectableOption = Array.from(voiceSelect.options).some(option => !option.disabled);
-      voiceSelect.disabled = state.piperDownloading || state.ttsPreparing || state.ttsRunning || !hasSelectableOption;
+      voiceSelect.disabled = state.piperDownloading || state.tinyAvaDownloading || state.ttsPreparing || state.ttsRunning || !hasSelectableOption;
     }
     updatePiperDownloadControls();
+    updateTinyAvaDownloadControls();
   }
 
   function updateRangeLabels() {
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
+    const expressiveness = byId('speechTtsExpressiveness');
+    const pauseScale = byId('speechTtsPauseScale');
     const rateText = byId('speechRateValue');
     const pitchText = byId('speechPitchValue');
+    const expressivenessText = byId('speechTtsExpressivenessValue');
+    const pauseScaleText = byId('speechTtsPauseScaleValue');
     if (rateText && rate) rateText.textContent = `${Number(rate.value).toFixed(2).replace('.', '٫')}×`;
     if (pitchText && pitch) pitchText.textContent = Number(pitch.value).toFixed(2).replace('.', '٫');
+    if (expressivenessText && expressiveness) expressivenessText.textContent = Number(expressiveness.value).toFixed(2).replace('.', '٫');
+    if (pauseScaleText && pauseScale) pauseScaleText.textContent = `${Number(pauseScale.value).toFixed(2).replace('.', '٫')}×`;
   }
 
   function readSpeechPreferences() {
@@ -1087,8 +1453,15 @@
     const prefs = readSpeechPreferences();
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
+    const style = byId('speechTtsStyle');
+    const expressiveness = byId('speechTtsExpressiveness');
+    const pauseScale = byId('speechTtsPauseScale');
+    const availableStyles = ['formal', 'conversational', 'calm', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively'];
     if (rate && Number.isFinite(Number(prefs.rate))) rate.value = String(Math.max(.75, Math.min(1.25, Number(prefs.rate))));
     if (pitch && Number.isFinite(Number(prefs.pitch))) pitch.value = String(Math.max(.8, Math.min(1.2, Number(prefs.pitch))));
+    if (style) style.value = availableStyles.includes(prefs.style) ? prefs.style : 'conversational';
+    if (expressiveness && Number.isFinite(Number(prefs.expressiveness))) expressiveness.value = String(Math.max(.7, Math.min(1.4, Number(prefs.expressiveness))));
+    if (pauseScale && Number.isFinite(Number(prefs.pauseScale))) pauseScale.value = String(Math.max(.6, Math.min(1.8, Number(prefs.pauseScale))));
     updateRangeLabels();
   }
 
@@ -1096,13 +1469,47 @@
     const voice = byId('speechVoice');
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
+    const style = byId('speechTtsStyle');
+    const expressiveness = byId('speechTtsExpressiveness');
+    const pauseScale = byId('speechTtsPauseScale');
     const prefs = {
       voiceURI: voice ? voice.value : '',
       rate: rate ? Number(rate.value) : 1,
-      pitch: pitch ? Number(pitch.value) : 1
+      pitch: pitch ? Number(pitch.value) : 1,
+      style: style ? style.value : 'conversational',
+      expressiveness: expressiveness ? Number(expressiveness.value) : 1.05,
+      pauseScale: pauseScale ? Number(pauseScale.value) : 1
     };
     try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); }
     catch (_) { /* Preferences are optional; never block speech for storage errors. */ }
+  }
+
+  function tinyAvaSynthesisSettings() {
+    const style = (byId('speechTtsStyle') || {}).value || 'conversational';
+    const expressiveness = Number((byId('speechTtsExpressiveness') || {}).value || 1.05);
+    const userPauseScale = Number((byId('speechTtsPauseScale') || {}).value || 1);
+    const pitchRatio = Number((byId('speechPitch') || {}).value || 1);
+    const rate = Number((byId('speechRate') || {}).value || 1);
+    const presets = {
+      conversational: { speed: 1, pitchShift: 0.005, pitchRange: 1.08, pauseScale: 1 },
+      formal: { speed: 0.96, pitchShift: 0, pitchRange: 0.92, pauseScale: 1.15 },
+      calm: { speed: 0.92, pitchShift: -0.02, pitchRange: 0.82, pauseScale: 1.32 },
+      happy: { speed: 1.025, pitchShift: 0.035, pitchRange: 1.22, pauseScale: 0.94 },
+      sad: { speed: 0.88, pitchShift: -0.045, pitchRange: 0.78, pauseScale: 1.38 },
+      angry: { speed: 1.055, pitchShift: 0.018, pitchRange: 1.28, pauseScale: 0.9 },
+      excited: { speed: 1.1, pitchShift: 0.06, pitchRange: 1.35, pauseScale: 0.82 },
+      storytelling: { speed: 0.94, pitchShift: 0, pitchRange: 1.14, pauseScale: 1.28 },
+      lively: { speed: 1.07, pitchShift: 0.02, pitchRange: 1.25, pauseScale: 0.9 }
+    };
+    const preset = presets[style] || presets.conversational;
+    const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+    return {
+      speed: clamp(rate * preset.speed, 0.7, 1.4),
+      pitchShift: clamp(Math.log(Math.max(0.5, pitchRatio)) + preset.pitchShift * expressiveness, -0.25, 0.25),
+      pitchRange: clamp(preset.pitchRange * expressiveness, 0.7, 1.4),
+      pauseScale: clamp(preset.pauseScale * userPauseScale, 0.6, 1.8),
+      style
+    };
   }
 
   function speechChunks(text, limit) {
@@ -1134,16 +1541,74 @@
     return chunks;
   }
 
+  function insertTinyAvaCue(cue) {
+    const input = byId('speechTtsInput');
+    if (!input || typeof cue !== 'string' || !cue) return;
+    const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+    const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+    const before = input.value.slice(0, start);
+    const after = input.value.slice(end);
+    const leadingSpace = before && !/\s$/u.test(before) ? ' ' : '';
+    const trailingSpace = after && !/^[\s,،.;:!?؟؛)\]]/u.test(after) ? ' ' : '';
+    const insertion = `${leadingSpace}${cue.trim()}${trailingSpace}`;
+    input.setRangeText(insertion, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }
+
+  function wrapTinyAvaStretchCue() {
+    const input = byId('speechTtsInput');
+    if (!input) return;
+    const start = Number.isInteger(input.selectionStart) ? input.selectionStart : 0;
+    const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+    const selectedText = input.value.slice(start, end).trim();
+    if (!selectedText) {
+      notify('برای کشیده‌خوانی، ابتدا یک واژه یا عبارت کوتاه را در متن انتخاب کنید.');
+      return;
+    }
+    const tagged = `[[کشیده:${selectedText}]]`;
+    if (input.value.length - (end - start) + tagged.length > (Number(input.maxLength) || 8000)) {
+      notify('متن برای افزودن نشانهٔ کشیده‌خوانی به سقف طول رسیده است.');
+      return;
+    }
+    input.setRangeText(tagged, start, end, 'end');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.focus();
+  }
+
+  function stripTinyAvaCues(text) {
+    return String(text || '')
+      .replace(/\[\[(?:مکث کوتاه|مکث بلند|مکث|نفس|مکث تنفسی|pause(?::(?:short|long))?|breath)\]\]/giu, ', ')
+      .replace(/\[\[(?:کشیده|stretch)\s*:\s*([\s\S]*?)\]\]/giu, '$1')
+      .replace(/\[\[(آه|اوه|هوم)\]\]/gu, '$1')
+      .replace(/\[\[sigh\]\]/giu, 'آه')
+      .replace(/\s+/gu, ' ')
+      .trim();
+  }
+
   function speakText() {
     const input = byId('speechTtsInput');
     const selected = getSelectedVoice();
     if (!input || !selected) return;
-    const text = input.value.trim();
-    if (!text) return notify('متنی برای خواندن وارد کنید.');
+    const rawText = input.value.trim();
+    if (!rawText) return notify('متنی برای خواندن وارد کنید.');
+    const text = selected.type === 'tiny-ava' ? rawText : stripTinyAvaCues(rawText);
+    if (!text) return notify('پس از حذف نشانه‌های ویژه، متنی برای خواندن باقی نماند.');
 
     stopSpeech(false);
     const session = ++state.ttsSession;
     state.ttsSessionUsed = true;
+
+    if (selected.type === 'tiny-ava') {
+      if (!state.tinyAvaInstalled) {
+        setStatus('speechTtsStatus', 'برای خواندن با پریسا یا مانا، ابتدا مدل مشترک tiny-ava را دریافت کنید.', 'idle');
+        updateTinyAvaDownloadControls();
+        updateTtsControls();
+        return;
+      }
+      startTinyAvaSpeech(text, session, selected);
+      return;
+    }
 
     if (selected.type === 'piper') {
       if (!state.piperVoiceIds.has(selected.id)) {
@@ -1244,6 +1709,84 @@
       text,
       rate: Number((byId('speechRate') || {}).value || 1),
       pitch: Number((byId('speechPitch') || {}).value || 1)
+    });
+    updateTtsControls();
+  }
+
+  function startTinyAvaSpeech(text, session, selected) {
+    state.ttsPreparing = true;
+    state.ttsRunning = false;
+    const settings = tinyAvaSynthesisSettings();
+    state.ttsSynthesisRate = settings.speed;
+    state.ttsChunks = [];
+    state.ttsChunkIndex = 0;
+    setStatus('speechTtsStatus', `در حال آماده‌سازی مدل ${TINY_AVA_VOICES[selected.id].title} روی همین دستگاه…`, 'busy');
+    updateTtsProgress(0, 1, 'در حال بازکردن مدل مشترک tiny-ava و آماده‌سازی مکث‌ها…');
+
+    let worker;
+    try {
+      worker = new Worker(new URL('./speech-vendor/tiny-ava/tiny-ava-worker.mjs', document.baseURI), {
+        type: 'module',
+        name: 'tiny-ava-persian-tts-offline'
+      });
+    } catch (error) {
+      state.ttsPreparing = false;
+      setStatus('speechTtsStatus', 'ساخت Worker محلی tiny-ava ممکن نشد؛ برنامه را از localhost یا HTTPS در مرورگر به‌روز اجرا کنید.', 'error');
+      updateTtsControls();
+      console.warn('Could not create the local tiny-ava worker:', error);
+      return;
+    }
+
+    state.tinyAvaWorker = worker;
+    worker.onmessage = event => {
+      if (session !== state.ttsSession) return;
+      const message = event.data || {};
+      if (message.requestId !== session) return;
+      if (message.type === 'progress') {
+        const total = Math.max(1, Number(message.total) || 1);
+        const done = Math.max(0, Math.min(total, Number(message.done) || 0));
+        updateTtsProgress(done, total, message.message || 'در حال ساخت گفتار محلی tiny-ava…');
+        setStatus('speechTtsStatus', message.message || 'در حال ساخت گفتار محلی tiny-ava…', 'busy');
+        return;
+      }
+      if (message.type === 'error') {
+        worker.terminate();
+        if (state.tinyAvaWorker === worker) state.tinyAvaWorker = null;
+        state.ttsPreparing = false;
+        state.ttsRunning = false;
+        state.ttsChunks = [];
+        setStatus('speechTtsStatus', `ساخت صدای tiny-ava ناموفق بود: ${message.message || 'خطای مدل محلی'}`, 'error');
+        updateTtsProgress(0, 1, 'تولید صدای tiny-ava ناموفق بود.');
+        updateTtsControls();
+        console.warn('Offline tiny-ava speech synthesis failed:', message.message);
+        return;
+      }
+      if (message.type !== 'complete' || !(message.wav instanceof ArrayBuffer)) return;
+      worker.terminate();
+      if (state.tinyAvaWorker === worker) state.tinyAvaWorker = null;
+      state.ttsPreparing = false;
+      state.ttsChunks = [];
+      state.ttsChunkIndex = 0;
+      playWavBuffer(message.wav, session, `صدای tiny-ava · ${TINY_AVA_VOICES[selected.id].title}`);
+    };
+    worker.onerror = event => {
+      if (session !== state.ttsSession) return;
+      worker.terminate();
+      if (state.tinyAvaWorker === worker) state.tinyAvaWorker = null;
+      state.ttsPreparing = false;
+      state.ttsRunning = false;
+      state.ttsChunks = [];
+      setStatus('speechTtsStatus', 'بارگذاری مدل یا موتور WASM محلی tiny-ava ناموفق بود؛ فایل‌های برنامه را کامل نگه دارید و صفحه را تازه کنید.', 'error');
+      updateTtsControls();
+      console.warn('Offline tiny-ava worker failed:', event && event.message);
+    };
+
+    worker.postMessage({
+      type: 'synthesize',
+      requestId: session,
+      voiceId: selected.id,
+      text,
+      settings
     });
     updateTtsControls();
   }
@@ -1476,6 +2019,10 @@
     if (state.piperWorker) {
       try { state.piperWorker.terminate(); } catch (_) { /* no-op */ }
       state.piperWorker = null;
+    }
+    if (state.tinyAvaWorker) {
+      try { state.tinyAvaWorker.terminate(); } catch (_) { /* no-op */ }
+      state.tinyAvaWorker = null;
     }
     if (window.speechSynthesis) {
       try { window.speechSynthesis.cancel(); } catch (_) { /* no-op */ }

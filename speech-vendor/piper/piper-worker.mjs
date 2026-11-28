@@ -2,7 +2,14 @@
 import * as ort from './ort.min.mjs';
 import { createPiperPhonemize } from './piper-phonemize.mjs';
 import { getStoredVoice } from './store.mjs';
-import { createPiperWavBuffer, normalizePersianTtsText, pauseAfterPiperChunk, piperInputIds, validatePersianPiperConfig } from './core.mjs';
+import {
+  applySpeechIntensity,
+  createPiperWavBuffer,
+  normalizePiperSpeechChunks,
+  pauseAfterPiperChunk,
+  piperInputIds,
+  validatePersianPiperConfig
+} from './core.mjs';
 
 const VOICE_IDS = new Set(['fa_IR-amir-medium', 'fa_IR-gyro-medium']);
 let phonemizerPromise = null;
@@ -118,7 +125,7 @@ async function loadVoice(voiceId, requestId) {
   inferencePromise = null;
 }
 
-async function inferChunk(text, rate) {
+async function inferChunk(text, rate, intensityScale = 1) {
   const phonemes = await phonemizeText(text, voiceConfig);
   const ids = piperInputIds(phonemes);
   const map = voiceConfig.phoneme_id_map || {};
@@ -137,7 +144,12 @@ async function inferChunk(text, rate) {
   const output = await inferenceSession.run(feeds);
   const audio = output && output.output && output.output.data;
   if (!audio || !audio.length) throw new Error('مدل فارسی برای این بخش صدای قابل پخش نساخت.');
-  return { samples: audio, sampleRate: Number(voiceConfig.audio.sample_rate), phonemeCount: ids.length, mapSize: Object.keys(map).length };
+  return {
+    samples: applySpeechIntensity(audio, intensityScale),
+    sampleRate: Number(voiceConfig.audio.sample_rate),
+    phonemeCount: ids.length,
+    mapSize: Object.keys(map).length
+  };
 }
 
 async function synthesize(message) {
@@ -145,7 +157,7 @@ async function synthesize(message) {
   if (!Number.isSafeInteger(requestId) || !VOICE_IDS.has(voiceId) || !Array.isArray(chunks) || !chunks.length) {
     throw new Error('درخواست ساخت گفتار فارسی معتبر نیست.');
   }
-  const cleanChunks = chunks.map(normalizePersianTtsText).filter(Boolean);
+  const cleanChunks = normalizePiperSpeechChunks(chunks);
   if (!cleanChunks.length) throw new Error('متنی برای خواندن باقی نماند.');
   await loadVoice(voiceId, requestId);
   await loadPhonemizer();
@@ -153,12 +165,16 @@ async function synthesize(message) {
   let sampleRate = Number(voiceConfig.audio.sample_rate);
   for (let index = 0; index < cleanChunks.length; index++) {
     postProgress(requestId, 'reading', index, cleanChunks.length, `در حال ساخت بخش ${index + 1} از ${cleanChunks.length} با صدای عصبی محلی…`);
-    const result = await inferChunk(cleanChunks[index], rate);
+    const chunk = cleanChunks[index];
+    const result = await inferChunk(chunk.text, Number(rate) * chunk.speedScale, chunk.intensityScale);
     sampleRate = result.sampleRate;
     audioChunks.push(result.samples);
   }
   const safePauseScale = Number.isFinite(Number(pauseScale)) ? Math.max(0.6, Math.min(1.8, Number(pauseScale))) : 1;
-  const pausesMs = cleanChunks.slice(0, -1).map(chunk => Math.min(2600, Math.round(pauseAfterPiperChunk(chunk) * safePauseScale)));
+  const pausesMs = cleanChunks.slice(0, -1).map(chunk => {
+    const basePause = chunk.pauseAfterMs > 0 ? chunk.pauseAfterMs : pauseAfterPiperChunk(chunk.text);
+    return Math.min(2600, Math.round(basePause * safePauseScale * chunk.pauseScale));
+  });
   const wav = createPiperWavBuffer(audioChunks, sampleRate, pausesMs);
   postProgress(requestId, 'complete', cleanChunks.length, cleanChunks.length, 'ساخت صدای عصبی فارسی کامل شد.');
   self.postMessage({ type: 'complete', requestId, wav }, [wav]);

@@ -1599,7 +1599,7 @@
       pitch: options.pitch,
       pitchRange: 1,
       pauseScale: options.pauseScale,
-      autoTextProsody: style === 'auto'
+      autoTextProsody: true
     };
   }
 
@@ -1633,33 +1633,14 @@
     window.openDebtCollectionAssist({ returningFromSpeech: true });
   }
 
-  function speechChunks(text, limit) {
-    const max = limit || 260;
-    const sentences = String(text).match(/[^.!?؟؛…\n]+[.!?؟؛…]?/gu) || [String(text)];
-    const chunks = [];
-    let current = '';
-    const pushCurrent = () => { if (current.trim()) chunks.push(current.trim()); current = ''; };
-    sentences.forEach(sentence => {
-      const part = sentence.trim();
-      if (!part) return;
-      if (part.length > max) {
-        pushCurrent();
-        let fragment = '';
-        part.split(/\s+/u).forEach(word => {
-          if (!word) return;
-          if (fragment && `${fragment} ${word}`.length > max) {
-            chunks.push(fragment);
-            fragment = word;
-          } else fragment = fragment ? `${fragment} ${word}` : word;
-        });
-        if (fragment) chunks.push(fragment);
-        return;
-      }
-      if (current && `${current} ${part}`.length > max) pushCurrent();
-      current = current ? `${current} ${part}` : part;
-    });
-    pushCurrent();
-    return chunks;
+  function speechChunks(text, limit, speechCore) {
+    const chunks = speechCore && typeof speechCore.segmentPersianDeliveryText === 'function'
+      ? speechCore.segmentPersianDeliveryText(text, limit)
+      : String(text || '').split(/(?<=[.!?؟…])\s+/u).map(part => ({ text: part.trim(), pauseAfterMs: 0 })).filter(part => part.text);
+    const profiles = speechCore && typeof speechCore.analyzePersianDeliverySequence === 'function'
+      ? speechCore.analyzePersianDeliverySequence(chunks)
+      : chunks.map(() => ({ tone: 'neutral', speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1, intensityScale: 1, pauseScale: 1 }));
+    return chunks.map((chunk, index) => ({ ...chunk, prosody: profiles[index] || {} }));
   }
 
   function insertTinyAvaCue(cue) {
@@ -1720,15 +1701,21 @@
     input.focus();
   }
 
-  function stripTinyAvaCues(text) {
-    return String(text || '')
+  function stripTinyAvaCues(text, speechCore) {
+    const withoutCues = String(text || '')
       .replace(/\[\[(?:مکث کوتاه|مکث بلند|مکث|نفس|مکث تنفسی|pause(?::(?:short|long))?|breath)\]\]/giu, ', ')
       .replace(/\[\[(?:تأکید|emphasis)\s*:\s*([\s\S]*?)\]\]/giu, '$1')
       .replace(/\[\[(?:کشیده|stretch)\s*:\s*([\s\S]*?)\]\]/giu, '$1')
       .replace(/\[\[(آه|اوه|هوم)\]\]/gu, '$1')
       .replace(/\[\[sigh\]\]/giu, 'آه')
-      .replace(/\s+/gu, ' ')
-      .trim();
+      .replace(/\[\[[\s\S]*?\]\]/gu, ' ')
+      .replace(/\[\[[\s\S]*$/gu, ' ');
+    const withoutMarkup = speechCore && typeof speechCore.stripSpeechMarkupTags === 'function'
+      ? speechCore.stripSpeechMarkupTags(withoutCues)
+      : withoutCues
+        .replace(/<\/?(?:[\p{L}][\p{L}\p{N}_.:-]+|[ps])(?:\s+[^<>]*)?\s*\/?>/gu, ' ')
+        .replace(/<\/?(?:[\p{L}][\p{L}\p{N}_.:-]+|[ps])(?:\s+[^<>]*)?$/gu, ' ');
+    return withoutMarkup.replace(/\s+/gu, ' ').trim();
   }
 
   async function speakText() {
@@ -1761,7 +1748,7 @@
     if (session !== state.ttsSession) return;
     const delivery = speechDeliverySettings(speechCore);
     state.ttsPreparing = false;
-    text = selected.type === 'tiny-ava' ? text : stripTinyAvaCues(text);
+    text = selected.type === 'tiny-ava' ? text : stripTinyAvaCues(text, speechCore);
     if (!text) {
       setStatus('speechTtsStatus', 'پس از حذف نشانه‌های ویژه، متنی برای خواندن باقی نماند.', 'warn');
       updateTtsControls();
@@ -1786,7 +1773,7 @@
         updateTtsControls();
         return;
       }
-      startPiperSpeech(text, session, selected, delivery);
+      startPiperSpeech(text, session, selected, delivery, speechCore);
       return;
     }
 
@@ -1797,7 +1784,7 @@
         updateTtsControls();
         return;
       }
-      state.ttsChunks = speechChunks(text, 260);
+      state.ttsChunks = speechChunks(text, 260, speechCore);
       state.ttsChunkIndex = 0;
       state.ttsSynthesisRate = delivery.speed;
       state.ttsRunning = true;
@@ -1807,16 +1794,17 @@
       return;
     }
 
-    startBundledSpeech(text, session, delivery);
+    startBundledSpeech(text, session, delivery, speechCore);
   }
 
-  function startBundledSpeech(text, session, delivery) {
+  function startBundledSpeech(text, session, delivery, speechCore) {
     state.ttsPreparing = true;
     state.ttsRunning = false;
     const synthesisRate = delivery.speed;
+    const chunks = speechChunks(text, 260, speechCore);
     state.ttsSynthesisRate = synthesisRate;
     setStatus('speechTtsStatus', 'در حال ساخت صدای فارسی در همین دستگاه؛ ممکن است بار نخست کمی زمان ببرد…', 'busy');
-    updateTtsProgress(0, 1, 'در حال آماده‌سازی صدای آفلاین…');
+    updateTtsProgress(0, chunks.length, 'در حال آماده‌سازی صدای آفلاین…');
 
     let worker;
     try {
@@ -1839,10 +1827,9 @@
       if (message.requestId !== session) return;
 
       if (message.type === 'progress') {
-        const label = message.phase === 'reading'
-          ? 'صدای فارسی ساخته شد؛ فایل WAV محلی آماده می‌شود…'
-          : 'موتور eSpeak NG در حال خواندن متن فارسی روی همین دستگاه است…';
-        setStatus('speechTtsStatus', label, 'busy');
+        const done = Math.max(0, Math.min(chunks.length, Number(message.done) || 0));
+        updateTtsProgress(done, chunks.length, `در حال ساخت گفتار eSpeak، بخش ${faNumber(Math.max(1, done))} از ${faNumber(chunks.length)}…`);
+        setStatus('speechTtsStatus', 'موتور eSpeak NG در حال خواندن متن فارسی روی همین دستگاه است…', 'busy');
         return;
       }
 
@@ -1876,9 +1863,10 @@
 
     worker.postMessage({
       requestId: session,
-      text,
+      chunks,
       rate: delivery.speed,
-      pitch: delivery.pitch
+      pitch: delivery.pitch,
+      pauseScale: delivery.pauseScale
     });
     updateTtsControls();
   }
@@ -1960,11 +1948,11 @@
     updateTtsControls();
   }
 
-  function startPiperSpeech(text, session, selected, delivery) {
+  function startPiperSpeech(text, session, selected, delivery, speechCore) {
     state.ttsPreparing = true;
     state.ttsRunning = false;
     state.ttsSynthesisRate = delivery.speed;
-    const chunks = speechChunks(text, 240);
+    const chunks = speechChunks(text, 240, speechCore);
     state.ttsChunks = chunks;
     state.ttsChunkIndex = 0;
     setStatus('speechTtsStatus', 'در حال آماده‌سازی مدل صدای عصبی روی همین دستگاه؛ بار اول ممکن است کمی طول بکشد…', 'busy');
@@ -2117,12 +2105,16 @@
     }
 
     const index = state.ttsChunkIndex++;
-    const utterance = new window.SpeechSynthesisUtterance(state.ttsChunks[index]);
+    const speechChunk = typeof state.ttsChunks[index] === 'string'
+      ? { text: state.ttsChunks[index], prosody: {} }
+      : state.ttsChunks[index];
+    const prosody = speechChunk.prosody || {};
+    const utterance = new window.SpeechSynthesisUtterance(speechChunk.text);
     utterance.voice = voice;
     utterance.lang = isPersianVoice(voice) ? voice.lang : LANGUAGE;
-    utterance.rate = delivery.speed;
-    utterance.pitch = delivery.pitch;
-    utterance.volume = 1;
+    utterance.rate = Math.max(0.75, Math.min(1.4, delivery.speed * (Number(prosody.speedScale) || 1)));
+    utterance.pitch = Math.max(0.8, Math.min(1.2, delivery.pitch * Math.exp(Number(prosody.pitchShiftOffset) || 0)));
+    utterance.volume = Math.max(0.65, Math.min(1, 0.94 * (Number(prosody.intensityScale) || 1)));
     updateTtsProgress(index, state.ttsChunks.length, `در حال خواندن، بخش ${faNumber(index + 1)} از ${faNumber(state.ttsChunks.length)}…`);
     utterance.onstart = () => {
       if (session !== state.ttsSession) return;
@@ -2132,7 +2124,12 @@
     utterance.onend = () => {
       if (session !== state.ttsSession) return;
       updateTtsProgress(index + 1, state.ttsChunks.length, `در حال خواندن، بخش ${faNumber(index + 1)} از ${faNumber(state.ttsChunks.length)}…`);
-      window.setTimeout(() => speakNextChunk(session, voice, delivery), Math.round(45 * delivery.pauseScale));
+      const segmentPause = Number(speechChunk.pauseAfterMs) > 0
+        ? Number(speechChunk.pauseAfterMs)
+        : 45;
+      window.setTimeout(() => speakNextChunk(session, voice, delivery), Math.round(
+        segmentPause * delivery.pauseScale * (Number(prosody.pauseScale) || 1)
+      ));
     };
     utterance.onerror = event => {
       if (session !== state.ttsSession) return;

@@ -10,6 +10,49 @@ export function normalizePersianTtsText(value) {
     .trim();
 }
 
+function boundedNumber(value, minimum, maximum, fallback) {
+  const number = Number(value);
+  return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? number : fallback));
+}
+
+/** Accept legacy string chunks and the local sentence-prosody records sent by the UI. */
+export function normalizePiperSpeechChunks(chunks) {
+  return Array.from(chunks || [], raw => {
+    const item = typeof raw === 'string' ? { text: raw } : (raw && typeof raw === 'object' ? raw : {});
+    const prosody = item.prosody && typeof item.prosody === 'object' ? item.prosody : item;
+    const text = normalizePersianTtsText(item.text);
+    if (!text) return null;
+    return {
+      text,
+      pauseAfterMs: boundedNumber(item.pauseAfterMs, 0, 2600, 0),
+      speedScale: boundedNumber(prosody.speedScale, 0.88, 1.12, 1),
+      pauseScale: boundedNumber(prosody.pauseScale, 0.75, 1.35, 1),
+      intensityScale: boundedNumber(prosody.intensityScale, 0.92, 1.08, 1),
+      tone: typeof prosody.tone === 'string' ? prosody.tone.slice(0, 32) : 'neutral'
+    };
+  }).filter(Boolean);
+}
+
+/** Apply restrained sentence-level intensity without clipping the float waveform. */
+export function applySpeechIntensity(samples, intensityScale = 1) {
+  if (!samples || typeof samples.length !== 'number') return samples;
+  const gain = boundedNumber(intensityScale, 0.9, 1.1, 1);
+  let peak = 0;
+  for (let index = 0; index < samples.length; index++) {
+    const sample = Number(samples[index]);
+    if (Number.isFinite(sample)) peak = Math.max(peak, Math.abs(sample));
+  }
+  const headroomGain = peak > 0.95 ? 0.95 / peak : 1;
+  const safeGain = peak > 0 ? Math.min(gain * headroomGain, 0.99 / peak) : gain;
+  if (Math.abs(safeGain - 1) < 1e-6) return samples;
+  const output = new Float32Array(samples.length);
+  for (let index = 0; index < samples.length; index++) {
+    const sample = Number(samples[index]);
+    output[index] = Number.isFinite(sample) ? Math.max(-0.99, Math.min(0.99, sample * safeGain)) : 0;
+  }
+  return output;
+}
+
 export function validatePiperVoiceConfig(config) {
   if (!config || typeof config !== 'object') throw new Error('پیکربندی صدای فارسی معتبر نیست.');
   const sampleRate = Number(config.audio && config.audio.sample_rate);

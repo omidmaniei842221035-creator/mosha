@@ -70,6 +70,8 @@
     ttsSynthesisRate: 1,
     ttsChunks: [],
     ttsChunkIndex: 0,
+    pendingSpeechLaunch: null,
+    speechReturnToDebt: false,
     voiceEventsBound: false
   };
 
@@ -96,6 +98,10 @@
             </div>
           </div>
           <div id="speechOverall" class="speech-hero-badge" role="status" aria-live="polite"><i></i><span>در حال بررسی قابلیت‌های دستگاه…</span></div>
+          <div id="speechDebtHandoff" class="speech-debt-handoff" hidden>
+            <span id="speechDebtHandoffText">پیش‌نویس مشتری با لحن پیشنهادی آمادهٔ پیش‌نمایش محلی است؛ برای شروع پخش، «خواندن متن» را بزنید.</span>
+            <button id="speechReturnToDebt" class="btn ghost sm" type="button">بازگشت به پاسخ‌یار</button>
+          </div>
         </section>
 
         <div class="speech-columns">
@@ -208,6 +214,7 @@
                     <option value="conversational">مکالمه‌ای و طبیعی</option>
                     <option value="formal">رسمی و شمرده</option>
                     <option value="calm">آرام و ملایم</option>
+                    <option value="supportive">همدلانه و حرفه‌ای · ملایم</option>
                     <option value="happy">شاد و صمیمی</option>
                     <option value="sad">غمگین و آرام</option>
                     <option value="angry">عصبانی و قاطع</option>
@@ -224,7 +231,7 @@
                   <label for="speechTtsPauseScale">میزان مکث‌ها <b id="speechTtsPauseScaleValue">۱٫۰۰×</b></label>
                   <input id="speechTtsPauseScale" type="range" min="0.6" max="1.8" step="0.1" value="1" aria-label="میزان مکث‌ها در خوانش tiny-ava" disabled>
                 </div>
-                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند الگوی متنیِ روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این تحلیل قاعده‌محور و تقریبی است، نه درک قطعی احساس یا نیت. presetهای شاد/غمگین/عصبانی نیز فقط نگاشت تقریبی‌اند. برای نجوا، خنده و تنفس واقعی، مدل فعلی آموزش ندیده است.</div>
+                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند الگوی متنیِ روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این تحلیل قاعده‌محور و تقریبی است، نه درک قطعی احساس یا نیت. presetهای شاد/غمگین/عصبانی و حالت همدلانهٔ حرفه‌ای فقط نگاشت تقریبیِ سرعت، زیر و بمی و مکث‌اند؛ مدل احساس مشتری را تشخیص نمی‌دهد. برای نجوا، خنده و تنفس واقعی آموزش ندیده است.</div>
               </div>
             </div>
 
@@ -254,7 +261,7 @@
             </details>
             <details class="speech-details">
               <summary>تلفظ، لحن و مجوز صداها</summary>
-              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی یا واژه‌نامهٔ محلی استفاده کنید؛ عدد، ساعت و درصد پیش از واج‌شناسی به واژه تبدیل و عددها، مبالغ، چند کلیدواژه و نام پس از عنوان‌هایی مثل «آقای» یا «دکتر» با تأکید ملایم مشخص می‌شوند. برای هر عبارت دلخواه، آن را انتخاب و دکمهٔ «تأکید» را بزنید یا از [[تأکید:عبارت]] استفاده کنید. ویرگول و مکث‌های درون جمله داخل همان نوبت مدل خوانده می‌شوند تا پیوند واژه‌ها قطع نشود؛ پایان جمله، پرسش، تعجب و بند خالی مکث می‌سازد و حالت خودکار با نشانه‌گذاری و چند الگوی روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچکی می‌دهد؛ این تحلیل آفلاین و قاعده‌محور است، نه درک قطعی احساس یا نیت. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[تأکید:عبارت]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
+              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی یا واژه‌نامهٔ محلی استفاده کنید؛ عدد، ساعت و درصد پیش از واج‌شناسی به واژه تبدیل و عددها، مبالغ، چند کلیدواژه و نام پس از عنوان‌هایی مثل «آقای» یا «دکتر» با تأکید ملایم مشخص می‌شوند. برای هر عبارت دلخواه، آن را انتخاب و دکمهٔ «تأکید» را بزنید یا از [[تأکید:عبارت]] استفاده کنید. ویرگول و مکث‌های درون جمله داخل همان نوبت مدل خوانده می‌شوند تا پیوند واژه‌ها قطع نشود؛ پایان جمله، پرسش، تعجب و بند خالی مکث می‌سازد و حالت خودکار با نشانه‌گذاری و چند الگوی روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچکی می‌دهد؛ این تحلیل آفلاین و قاعده‌محور است، نه درک قطعی احساس یا نیت. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[تأکید:عبارت]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، همدلانهٔ حرفه‌ای، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
             </details>
           </section>
         </div>
@@ -266,11 +273,14 @@
         </div>
       </div>`;
 
+    const handoff = byId('speechDebtHandoff');
+    if (handoff) handoff.hidden = !state.speechReturnToDebt;
     bindWorkspaceEvents();
     if (typeof window.showT === 'function') window.showT('استودیوی گفتار فارسی', 'دیکته و خوانش با پردازش محلی روی همین دستگاه');
     else if (typeof window.show === 'function') window.show('tool', true, 'دیکته و خوانش با پردازش محلی روی همین دستگاه');
     document.querySelectorAll('.nav [data-speech-nav]').forEach(button => button.classList.add('on'));
     loadSpeechPreferences();
+    applyPendingSpeechLaunch();
     loadPronunciationLexicon();
     updateTranscriptCounters();
     updateTtsCounters();
@@ -313,6 +323,7 @@
     byButton('speechPause', pauseSpeech);
     byButton('speechResume', resumeSpeech);
     byButton('speechTtsStop', () => stopSpeech(true));
+    byButton('speechReturnToDebt', returnToDebtCollection);
     byButton('speechPiperInstall', installOrRemovePiperVoice);
     byButton('speechTinyAvaInstall', installOrRemoveTinyAvaModel);
 
@@ -1541,7 +1552,7 @@
     const style = byId('speechTtsStyle');
     const expressiveness = byId('speechTtsExpressiveness');
     const pauseScale = byId('speechTtsPauseScale');
-    const availableStyles = ['auto', 'formal', 'conversational', 'calm', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively'];
+    const availableStyles = ['auto', 'formal', 'conversational', 'calm', 'supportive', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively'];
     if (rate && Number.isFinite(Number(prefs.rate))) rate.value = String(Math.max(.75, Math.min(1.25, Number(prefs.rate))));
     if (pitch && Number.isFinite(Number(prefs.pitch))) pitch.value = String(Math.max(.8, Math.min(1.2, Number(prefs.pitch))));
     if (style) style.value = availableStyles.includes(prefs.style) ? prefs.style : 'auto';
@@ -1581,6 +1592,7 @@
       conversational: { speed: 1, pitchShift: 0.005, pitchRange: 1.08, pauseScale: 1 },
       formal: { speed: 0.96, pitchShift: 0, pitchRange: 0.92, pauseScale: 1.15 },
       calm: { speed: 0.92, pitchShift: -0.02, pitchRange: 0.82, pauseScale: 1.32 },
+      supportive: { speed: 0.98, pitchShift: -0.005, pitchRange: 1.0, pauseScale: 1.08 },
       happy: { speed: 1.025, pitchShift: 0.035, pitchRange: 1.22, pauseScale: 0.94 },
       sad: { speed: 0.88, pitchShift: -0.045, pitchRange: 0.78, pauseScale: 1.38 },
       angry: { speed: 1.055, pitchShift: 0.018, pitchRange: 1.28, pauseScale: 0.9 },
@@ -1597,6 +1609,36 @@
       pauseScale: clamp(preset.pauseScale * userPauseScale, 0.6, 1.8),
       style
     };
+  }
+
+  function applyPendingSpeechLaunch() {
+    const launch = state.pendingSpeechLaunch;
+    if (!launch) return;
+    state.pendingSpeechLaunch = null;
+    const input = byId('speechTtsInput');
+    if (!input) return;
+    input.value = String(launch.text || '').slice(0, Number(input.maxLength) || 8000);
+    const style = byId('speechTtsStyle');
+    const validStyles = new Set(['auto', 'formal', 'conversational', 'calm', 'supportive', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively']);
+    if (style && validStyles.has(launch.style)) style.value = launch.style;
+    const expressiveness = byId('speechTtsExpressiveness');
+    const pauseScale = byId('speechTtsPauseScale');
+    if (expressiveness && Number.isFinite(Number(launch.expressiveness))) expressiveness.value = String(Math.max(0.7, Math.min(1.4, Number(launch.expressiveness))));
+    if (pauseScale && Number.isFinite(Number(launch.pauseScale))) pauseScale.value = String(Math.max(0.6, Math.min(1.8, Number(launch.pauseScale))));
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    updateRangeLabels();
+    updateTtsCounters();
+    updateTtsControls();
+    const handoffText = byId('speechDebtHandoffText');
+    if (handoffText) handoffText.textContent = `پروفایل «${String(launch.deliveryLabel || 'پیشنهادی').slice(0, 80)}» تنظیم شد؛ دامنهٔ اثر preset و تأکید واژگانی به موتور انتخابی بستگی دارد (tiny-ava پشتیبانی کامل‌تری دارد). برای شروع پخش، «خواندن متن» را جداگانه بزنید.`;
+  }
+
+  function returnToDebtCollection() {
+    if (!state.speechReturnToDebt || typeof window.openDebtCollectionAssist !== 'function') return;
+    stopSpeech(false);
+    state.speechReturnToDebt = false;
+    state.pendingSpeechLaunch = null;
+    window.openDebtCollectionAssist({ returningFromSpeech: true });
   }
 
   function speechChunks(text, limit) {
@@ -2213,7 +2255,16 @@
     else console.info(message);
   }
 
-  function openSpeechTool() {
+  function openSpeechTool(options = {}) {
+    const launch = options && typeof options === 'object' && typeof options.text === 'string' ? options : null;
+    state.pendingSpeechLaunch = launch ? {
+      text: launch.text,
+      style: String(launch.style || ''),
+      expressiveness: launch.expressiveness,
+      pauseScale: launch.pauseScale,
+      deliveryLabel: String(launch.deliveryLabel || '')
+    } : null;
+    state.speechReturnToDebt = !!(launch && launch.returnToDebt === true);
     state.ttsSessionUsed = false;
     if (state.recognition) {
       state.recognitionSession++;

@@ -1,4 +1,4 @@
-const CACHE = 'shahr-advisor-pc-v43';
+const CACHE = 'shahr-advisor-pc-v44';
 const APP_CACHE_PREFIX = 'shahr-advisor-pc-';
 const APP_SHELL = [
   './',

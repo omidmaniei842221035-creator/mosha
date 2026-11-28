@@ -21,6 +21,7 @@
     formSnapshot: null,
     analysis: null,
     draft: '',
+    draftOrigin: '',
     generating: false,
     lastRecognitionError: ''
   };
@@ -81,6 +82,8 @@
     if (actualReply) actualReply.disabled = busy;
     const record = $('dcRecordTurn');
     if (record) record.disabled = busy || !String((transcript || {}).value || '').trim() || !state.draft;
+    const speakDraft = $('dcSpeakDraft');
+    if (speakDraft) speakDraft.disabled = busy || !state.draft;
     const identity = $('dcIdentityVerified');
     const identityVerified = !!(identity && identity.checked);
     const facts = $('dcFactsVerified');
@@ -462,7 +465,11 @@
     const tone = document.createElement('span');
     tone.className = 'dc-tone-chip';
     tone.textContent = `لحن پیشنهادی: ${toneLabel(analysis.tone)}`;
-    card.append(heading, basis, reaction, tone);
+    const speechProfile = state.core.selectDebtSpeechProfile(analysis.id, selectedTone(analysis));
+    const delivery = document.createElement('small');
+    delivery.className = 'dc-delivery-note';
+    delivery.textContent = `پروفایل اجرای محلی: ${speechProfile.label}؛ اثر لحن و تأکید واژگانی پیشرفته در tiny-ava فعال است؛ موتورهای جایگزین امکانات متفاوتی دارند.`;
+    card.append(heading, basis, reaction, tone, delivery);
     if (voice && voice.cues && voice.cues.length) {
       const cueList = document.createElement('ul');
       cueList.className = 'dc-cue-list';
@@ -478,6 +485,7 @@
 
   function clearCurrentAnalysisAndDraft() {
     state.analysis = null;
+    state.draftOrigin = '';
     const analysis = $('dcAnalysis');
     if (analysis) analysis.replaceChildren();
     const actualReply = $('dcActualReply');
@@ -493,6 +501,7 @@
     if (badge) badge.textContent = origin || '';
     if (container) container.hidden = !text;
     state.draft = text || '';
+    state.draftOrigin = origin || '';
     const button = $('dcRecordTurn');
     if (button) button.disabled = state.generating || state.listening || state.starting || !String(($('dcTranscript') || {}).value || '').trim() || !state.draft;
     updateInteractionControls();
@@ -603,6 +612,25 @@
     setStatus('تحلیل واژگانی و پیشنهاد واکنش انجام شد؛ پیش‌نویس را با اطلاعات رسمی تطبیق دهید.', 'ready');
   }
 
+  function previewDraftSpeech() {
+    if (!state.draft || state.generating) return;
+    if (!state.core) return setStatus('موتور تحلیل لحن در دسترس نیست؛ پیش‌نمایش صوتی آماده نشد.', 'warn');
+    const text = state.core.extractDebtCustomerReply(state.draft);
+    if (!text) return setStatus('متن گفتاریِ مشتری در پیش‌نویس پیدا نشد؛ پاسخ را بازبینی کنید.', 'warn');
+    if (typeof window.openSpeechTool !== 'function') return setStatus('استودیوی گفتار فارسی در این صفحه در دسترس نیست.', 'warn');
+    const analysis = state.analysis || { id: 'general', tone: 'حرفه‌ای و پرسش‌محور' };
+    const profile = state.core.selectDebtSpeechProfile(analysis.id, selectedTone(analysis));
+    snapshotFormForModelSetup();
+    window.openSpeechTool({
+      text,
+      style: profile.style,
+      expressiveness: profile.expressiveness,
+      pauseScale: profile.pauseScale,
+      deliveryLabel: profile.label,
+      returnToDebt: true
+    });
+  }
+
   function recordTurn() {
     if (state.generating || state.listening || state.starting) return;
     const customer = String(($('dcTranscript') || {}).value || '').trim();
@@ -632,6 +660,7 @@
     state.formSnapshot = null;
     state.analysis = null;
     state.draft = '';
+    state.draftOrigin = '';
     state.voiceSummary = null;
     if ($('dcTranscript')) $('dcTranscript').value = '';
     if ($('dcActualReply')) $('dcActualReply').value = '';
@@ -658,6 +687,9 @@
       if (node) snapshot[id] = node.type === 'checkbox' ? node.checked : node.value;
     });
     snapshot.voiceSummary = state.voiceSummary;
+    snapshot.analysis = state.analysis;
+    snapshot.draft = state.draft;
+    snapshot.draftOrigin = state.draftOrigin;
     state.formSnapshot = snapshot;
   }
 
@@ -667,11 +699,16 @@
     state.formSnapshot = null;
     Object.entries(snapshot).forEach(([id, value]) => {
       if (id === 'voiceSummary') { state.voiceSummary = value; return; }
+      if (id === 'analysis') { state.analysis = value; return; }
+      if (id === 'draft') { state.draft = String(value || ''); return; }
+      if (id === 'draftOrigin') { state.draftOrigin = String(value || ''); return; }
       const node = $(id);
       if (!node) return;
       if (node.type === 'checkbox') node.checked = !!value;
       else node.value = String(value == null ? '' : value);
     });
+    if (state.analysis) renderAnalysis(state.analysis, state.voiceSummary);
+    if (state.draft) renderDraft(state.draft, state.draftOrigin);
   }
 
   function bindEvents() {
@@ -682,6 +719,7 @@
     $('dcConsent')?.addEventListener('change', updateSpeechControls);
     $('dcAnalyze')?.addEventListener('click', analyzeAndDraft);
     $('dcTone')?.addEventListener('change', clearCurrentAnalysisAndDraft);
+    $('dcSpeakDraft')?.addEventListener('click', previewDraftSpeech);
     $('dcRecordTurn')?.addEventListener('click', recordTurn);
     $('dcClearSession')?.addEventListener('click', clearSession);
     $('dcClearText')?.addEventListener('click', () => {
@@ -832,6 +870,8 @@
           <div id="dcDraft" class="dc-draft" hidden>
             <div class="dc-draft-head"><b>پاسخ پیشنهادی · پیش‌نویس</b><small id="dcDraftOrigin"></small></div>
             <blockquote id="dcDraftText"></blockquote>
+            <button id="dcSpeakDraft" class="btn ghost block" type="button" disabled>پیش‌نمایش محلی با لحن پیشنهادی</button>
+            <small class="dc-muted">پیش‌نمایش فقط در استودیوی آفلاین باز می‌شود؛ پخش با تأیید جداگانهٔ کارشناس انجام می‌گیرد و هیچ تماس/پیامی فرستاده نمی‌شود.</small>
             <label for="dcActualReply" class="dc-label">پاسخی که کارشناس واقعاً گفت (اختیاری)</label>
             <textarea id="dcActualReply" dir="rtl" rows="2" maxlength="1200" placeholder="برای حفظ زمینهٔ مکالمه در نوبت بعد؛ اگر چیزی نگفتید، خالی بگذارید."></textarea>
             <button id="dcRecordTurn" class="btn ghost block" type="button" disabled>ثبت این نوبت و آماده‌سازی نوبت بعد</button>
@@ -842,7 +882,7 @@
           <div class="dc-card-head"><div><h3>گفت‌وگوی همین جلسه</h3><small>فقط تا وقتی این ابزار باز است؛ ذخیرهٔ دائمی یا پروندهٔ تماس ساخته نمی‌شود.</small></div></div>
           <div id="dcTurns" class="dc-turns"></div>
         </section>
-        <details class="dc-details"><summary>روش تحلیل و محدودیت‌ها</summary><p>برچسب تعامل از چند الگوی واژگانیِ قابل بازبینی (مانند «پرداخت کردم»، «اعتراض»، «توان پرداخت ندارم») ساخته می‌شود؛ اگر متن‌نگاری خطا داشته باشد، برچسب هم ممکن است اشتباه باشد. شاخص صوت فقط مدت، سرعت تقریبیِ متن، سطح نسبی سیگنال و وقفه‌های کم‌صدا را از قاب‌های کوتاهِ RMS محاسبه می‌کند؛ موج خام، ضبط، تاریخچهٔ دائمی یا الگوی هویتی نگه‌داری نمی‌شود. این شاخص‌ها به میکروفون و محیط وابسته‌اند و احساس، سلامت، صداقت، ریسک یا توان بازپرداخت مشتری را نشان نمی‌دهند. مدل Qwen هم روی GPU همین مرورگر اجرا می‌شود؛ دانلود نخست مدل اختیاری است و پس از ذخیره می‌توان پاسخ‌های پویا را آفلاین ساخت.</p></details>
+        <details class="dc-details"><summary>روش تحلیل و محدودیت‌ها</summary><p>برچسب تعامل از چند الگوی واژگانیِ قابل بازبینی (مانند «پرداخت کردم»، «اعتراض»، «توان پرداخت ندارم») ساخته می‌شود؛ اگر متن‌نگاری خطا داشته باشد، برچسب هم ممکن است اشتباه باشد. همان برچسب و لحن انتخابی فقط یک پروفایل گفتاری محلی و ملایم (همدلانه، رسمی یا مکالمه‌ای) برای پیش‌نمایش پاسخ تعیین می‌کنند؛ نشانه‌های مکث و تأکید واژگان در TTS خودکارند و خروجی مشتری را تغییر نمی‌دهند. شاخص صوت فقط مدت، سرعت تقریبیِ متن، سطح نسبی سیگنال و وقفه‌های کم‌صدا را از قاب‌های کوتاهِ RMS محاسبه می‌کند؛ موج خام، ضبط، تاریخچهٔ دائمی یا الگوی هویتی نگه‌داری نمی‌شود. این شاخص‌ها به میکروفون و محیط وابسته‌اند و احساس، سلامت، صداقت، ریسک یا توان بازپرداخت مشتری را نشان نمی‌دهند. مدل Qwen هم روی GPU همین مرورگر اجرا می‌شود؛ دانلود نخست مدل اختیاری است و پس از ذخیره می‌توان پاسخ‌های پویا را آفلاین ساخت.</p></details>
       </div>`;
     restoreFormSnapshot();
     bindEvents();
@@ -859,7 +899,9 @@
     state.voiceSummary = null;
     state.analysis = null;
     state.draft = '';
-    if (options.returningFromModelSetup && typeof window.show === 'function') {
+    state.draftOrigin = '';
+    const returningToCaller = !!(options.returningFromModelSetup || options.returningFromSpeech);
+    if (returningToCaller && typeof window.show === 'function') {
       window.show('tool', false, 'دستیار مکالمه و پاسخ‌یارِ محلی برای کارشناس');
       if ($('abTitle')) $('abTitle').textContent = 'پیگیری و وصول مطالبات';
       document.querySelectorAll('.nav button').forEach(button => button.classList.remove('on'));

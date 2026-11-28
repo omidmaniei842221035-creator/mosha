@@ -4,7 +4,9 @@ import {
   analyzeDebtVoiceSignal,
   buildDebtAssistantMessages,
   buildDebtFallbackReply,
-  classifyDebtInteraction
+  classifyDebtInteraction,
+  extractDebtCustomerReply,
+  selectDebtSpeechProfile
 } from '../debt-collection-core.mjs';
 
 test('classifies common Persian collection turns with reviewable lexical cues', () => {
@@ -24,6 +26,29 @@ test('classifies common Persian collection turns with reviewable lexical cues', 
     assert.equal(result.id, expected, utterance);
     assert.match(result.certainty, /واژگانی|کارشناس/u);
   }
+});
+
+test('maps transcript interaction categories to restrained local delivery profiles', () => {
+  const hardship = classifyDebtInteraction('توان پرداخت ندارم');
+  const empathetic = selectDebtSpeechProfile(hardship.id, hardship.tone);
+  assert.equal(empathetic.style, 'supportive');
+  assert.match(empathetic.label, /همدلانه/u);
+  assert.ok(empathetic.automaticCues.some(cue => /مکث/u.test(cue)));
+  assert.ok(empathetic.automaticCues.some(cue => /تأکید/u.test(cue)));
+  assert.equal(selectDebtSpeechProfile('refusal', 'قاطع و محترمانه').style, 'formal');
+  assert.equal(selectDebtSpeechProfile('promise', 'همکارانه و روشن').style, 'conversational');
+  assert.equal(selectDebtSpeechProfile('unrecognized').style, 'conversational');
+  assert.match(empathetic.basis, /نه ویژگی‌های صوتی/u);
+});
+
+test('extracts only the customer-facing paragraph for local speech preview', () => {
+  assert.equal(
+    extractDebtCustomerReply('پاسخ پیشنهادی به مشتری: متوجه شدم. اجازه بدهید بررسی کنم.\nگام بعدی کارشناس: مورد را در سامانهٔ رسمی پیگیری کنید.'),
+    'متوجه شدم. اجازه بدهید بررسی کنم.'
+  );
+  assert.equal(extractDebtCustomerReply('**پاسخ به مشتری:** سلام.\n**گام بعدی کارشناس:** ارجاع به سرپرست.'), 'سلام.');
+  assert.equal(extractDebtCustomerReply('پاسخ پیشنهادی به مشتری: سلام.\n**گام بعدی کارشناس:** ارجاع به سرپرست.'), 'سلام.');
+  assert.equal(extractDebtCustomerReply('### پاسخ پیشنهادی به مشتری\nسلام.\n### گام بعدی کارشناس\nارجاع به سرپرست.'), 'سلام.');
 });
 
 test('normalizes Arabic/Persian letter variants and conservatively prioritizes a reported payment', () => {
@@ -64,6 +89,8 @@ test('uses only a generic identity-check fallback until identity is verified', (
 test('prompt builder gates verified financial context and sanitizes technical voice metrics', () => {
   const unverified = buildDebtAssistantMessages({
     transcript: 'شماره حساب ۱۲۳۴۵۶۷۸۹ را فرستادم؛ پرداخت نمی‌کنم',
+    interaction: 'hardship',
+    tone: 'همدلانه و بدون فشار',
     identityVerified: false,
     factsVerified: true,
     verifiedFacts: 'مانده محرمانه ۹۹۹۹',
@@ -72,6 +99,10 @@ test('prompt builder gates verified financial context and sanitizes technical vo
     turns: Array.from({ length: 9 }, (_, index) => ({ customer: `نوبت ${index}`, agent: index === 8 ? 'پاسخ پیشنهادی ثبت‌نشده' : 'پاسخ', agentReplyConfirmed: index !== 8 }))
   });
   const payload = JSON.parse(unverified[1].content);
+  assert.equal(payload.speechDeliveryProfile.style, 'supportive');
+  assert.equal(payload.speechDeliveryProfile.expressiveness, 0.98);
+  assert.equal(payload.speechDeliveryProfile.automaticCues.length, 2);
+  assert.match(unverified[0].content, /نشانه‌های فنیِ اجرا/u);
   assert.equal(payload.verifiedBankFacts, null);
   assert.equal(payload.approvedActionsOnly, null);
   assert.equal(payload.factsVerifiedInOfficialSystem, false);

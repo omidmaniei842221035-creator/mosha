@@ -22,6 +22,10 @@ test('offers sentence-aware prosody and a locally saved pronunciation lexicon', 
   assert.match(tool, /value="auto">خوانش خودکار و جمله‌محور/u);
   assert.match(tool, /id="speechTtsLexicon"/u);
   assert.match(tool, /id="speechTinyAvaEmphasis"/u);
+  assert.match(tool, /value="supportive"/u);
+  assert.match(tool, /id="speechDebtHandoff"/u);
+  assert.match(tool, /applyPendingSpeechLaunch\(\)/u);
+  assert.match(tool, /returnToDebtCollection/u);
   assert.match(tool, /wrapTinyAvaEmphasisCue/u);
   assert.match(tool, /\[\[تأکید:\$\{selectedText\}\]\]/u);
   assert.match(tool, /localStorage\.setItem\(LEXICON_KEY, raw\)/u);
@@ -41,7 +45,7 @@ test('prefers the local neural Persian voice unless an explicit voice choice was
 test('uses punctuation-sensitive pauses for Piper and advances the offline shell cache', () => {
   assert.match(piperWorker, /pauseAfterPiperChunk/u);
   assert.match(piperWorker, /cleanChunks\.slice\(0, -1\)\.map\(pauseAfterPiperChunk\)/u);
-  assert.match(serviceWorker, /shahr-advisor-pc-v43/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v44/u);
   for (const path of ['speech-tool.js', 'speech-vendor/tiny-ava/core.mjs', 'speech-vendor/piper/piper-worker.mjs', 'speech-vendor/piper/core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline shell`);
   }

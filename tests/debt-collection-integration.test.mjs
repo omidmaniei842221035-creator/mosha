@@ -32,11 +32,17 @@ test('uses an opt-in local model API that stays separate from the public chat hi
   assert.match(localChat, /window\.generateLocalChatDraft\s*=\s*generateLocalChatDraft/u);
   assert.match(localChat, /messages,\s*stream:\s*true/u);
   assert.match(helper, /window\.generateLocalChatDraft\(messages\)/u);
+  assert.match(helper, /id="dcSpeakDraft"/u);
+  assert.match(helper, /selectDebtSpeechProfile\(analysis\.id, selectedTone\(analysis\)\)/u);
+  assert.match(helper, /window\.openSpeechTool\(\{/u);
+  assert.match(helper, /returnToDebt:\s*true/u);
+  assert.match(helper, /returningFromSpeech/u);
+  assert.match(helper, /extractDebtCustomerReply/u);
   assert.match(helper, /تاریخچهٔ گفت‌وگوی عمومی جدا/u);
 });
 
 test('precaches the new app assets and advances the service-worker cache key', () => {
-  assert.match(serviceWorker, /shahr-advisor-pc-v43/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v44/u);
   for (const path of ['debt-collection.css', 'debt-collection.js', 'debt-collection-core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline app shell`);
   }

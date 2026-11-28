@@ -1,4 +1,4 @@
-const CACHE = 'shahr-advisor-pc-v36';
+const CACHE = 'shahr-advisor-pc-v38';
 const APP_CACHE_PREFIX = 'shahr-advisor-pc-';
 const APP_SHELL = [
   './',
@@ -21,6 +21,17 @@ const APP_SHELL = [
   './speech-vendor/espeak-ng.wasm',
   './speech-vendor/espeak-core.mjs',
   './speech-vendor/espeak-worker.mjs',
+  './speech-vendor/piper/piper-worker.mjs',
+  './speech-vendor/piper/core.mjs',
+  './speech-vendor/piper/store.mjs',
+  './speech-vendor/piper/piper-phonemize.mjs',
+  './speech-vendor/piper/piper_phonemize.wasm',
+  './speech-vendor/piper/piper_phonemize.data',
+  './speech-vendor/piper/ort.min.mjs',
+  './speech-vendor/piper/ort-wasm-simd-threaded.mjs',
+  './speech-vendor/piper/ort-wasm-simd-threaded.wasm',
+  './speech-vendor/piper/README.md',
+  './speech-vendor/piper/THIRD-PARTY-NOTICES.txt',
   './speech-vendor/README.md',
   './speech-vendor/LICENSE-GPL-3.0.txt'
 ];

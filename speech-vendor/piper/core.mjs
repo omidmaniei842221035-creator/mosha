@@ -48,6 +48,17 @@ export function piperInputIds(phonemeResult) {
   return BigInt64Array.from(ids, id => BigInt(id));
 }
 
+export function pauseAfterPiperChunk(text) {
+  const value = String(text || '').trimEnd().replace(/["')\]»”’}]+$/u, '').trimEnd();
+  const ending = value.slice(-1);
+  if (ending === '?' || ending === '؟') return 250;
+  if (ending === '!') return 210;
+  if (ending === '…') return 360;
+  if (ending === '.' || ending === '؛' || ending === ';') return 180;
+  if (ending === ':' || ending === '،' || ending === ',') return 110;
+  return 28;
+}
+
 export async function sha256Hex(value) {
   const subtle = globalThis.crypto && globalThis.crypto.subtle;
   if (!subtle || typeof subtle.digest !== 'function') {
@@ -67,14 +78,20 @@ export function createPiperWavBuffer(sampleChunks, sampleRate, silenceMs = 90) {
   const chunks = (sampleChunks || []).filter(chunk => chunk && chunk.length);
   if (!chunks.length) throw new Error('مدل گفتار صوتی تولید نکرد.');
 
-  const gapSamples = Math.max(0, Math.min(rate, Math.round(rate * Number(silenceMs || 0) / 1000)));
-  const totalSamples = chunks.reduce((sum, chunk) => sum + chunk.length, 0) + gapSamples * Math.max(0, chunks.length - 1);
+  const perGapPauses = Array.isArray(silenceMs);
+  const gapSamples = chunks.slice(0, -1).map((_chunk, index) => {
+    const requestedMs = perGapPauses ? silenceMs[index] : silenceMs;
+    // Preserve Piper's original one-second cap for scalar callers; tiny-ava passes explicit per-gap pauses.
+    const durationMs = Math.max(0, Math.min(perGapPauses ? 2600 : 1000, Number(requestedMs) || 0));
+    return Math.round(rate * durationMs / 1000);
+  });
+  const totalSamples = chunks.reduce((sum, chunk) => sum + chunk.length, 0) + gapSamples.reduce((sum, samples) => sum + samples, 0);
   const buffer = new ArrayBuffer(44 + totalSamples * 2);
   const view = new DataView(buffer);
   view.setUint32(0, 0x46464952, true); // RIFF
   view.setUint32(4, buffer.byteLength - 8, true);
   view.setUint32(8, 0x45564157, true); // WAVE
-  view.setUint32(12, 0x20746d66, true); // fmt 
+  view.setUint32(12, 0x20746d66, true); // fmt chunk
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true); // PCM
   view.setUint16(22, 1, true); // mono
@@ -93,7 +110,7 @@ export function createPiperWavBuffer(sampleChunks, sampleRate, silenceMs = 90) {
       view.setInt16(offset, sample < 0 ? Math.round(sample * 32768) : Math.round(sample * 32767), true);
       offset += 2;
     }
-    if (index < chunks.length - 1) offset += gapSamples * 2;
+    if (index < chunks.length - 1) offset += gapSamples[index] * 2;
   });
   return buffer;
 }

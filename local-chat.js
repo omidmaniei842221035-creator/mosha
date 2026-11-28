@@ -27,7 +27,8 @@
     loading: false,
     generating: false,
     stopping: false,
-    requestId: 0
+    requestId: 0,
+    returnAction: null
   };
   const $ = id => document.getElementById(id);
   const icon = (name, size) => typeof window.ICON === 'function' ? window.ICON(name, size || 18) : '';
@@ -61,6 +62,7 @@
           <div class="lc-warning"><b>برای پاسخ‌های بهتر، ۸B انتخاب شده است.</b> این مدل حدود ۵٫۷GB حافظهٔ GPU می‌خواهد و در عمل کمی فضای اضافه لازم دارد؛ اگر بارگیری یا اجرا به‌علت کمبود حافظه شکست خورد، ۴B را انتخاب کنید. مدل ۱٫۷B سبک‌تر است اما معمولاً پاسخ‌های محدودتری می‌دهد. دانلود نخستین وزن‌ها چند گیگابایت است؛ پس از ذخیره، چت آفلاین می‌شود. بدون WebGPU هیچ‌کدام از این مدل‌ها اجرا نمی‌شوند.</div>
           <div class="lc-setup-actions">
             <button id="lcLoad" class="btn pri" type="button">${icon('download', 16)} بارگذاری / دریافت مدل</button>
+            ${state.returnAction ? '<button id="lcReturnToCaller" class="btn ghost" type="button">بازگشت به دستیار پیگیری مطالبات</button>' : ''}
             <span id="lcStorageInfo" class="lc-storage">در حال بررسی فضای ذخیره‌سازی…</span>
           </div>
           <div id="lcProgressWrap" class="lc-progress-wrap" hidden>
@@ -98,6 +100,8 @@
 
     const load = $('lcLoad');
     if (load) load.addEventListener('click', loadSelectedModel);
+    const returnButton = $('lcReturnToCaller');
+    if (returnButton) returnButton.addEventListener('click', returnToCaller);
     const select = $('lcModel');
     if (select && state.modelId) select.value = state.modelId;
     if (select) {
@@ -486,7 +490,65 @@
     updateControls();
   }
 
-  function openLocalChat() {
+  function getLocalChatStatus() {
+    return {
+      ready: !!state.engine && !state.loading && !state.generating,
+      loading: !!state.loading,
+      generating: !!state.generating,
+      modelId: state.modelId || ''
+    };
+  }
+
+  async function generateLocalChatDraft(messages) {
+    if (!state.engine) throw new Error('مدل زبانی محلی بارگذاری نشده است.');
+    if (state.loading || state.generating) throw new Error('مدل محلی در حال استفاده است؛ پس از پایان دوباره تلاش کنید.');
+    if (!Array.isArray(messages) || !messages.length || messages.some(message => !message || !['system', 'user', 'assistant'].includes(message.role) || typeof message.content !== 'string')) {
+      throw new Error('زمینهٔ پیش‌نویس محلی معتبر نیست.');
+    }
+    const modelId = state.modelId;
+    const requestId = ++state.requestId;
+    state.generating = true;
+    state.stopping = false;
+    updateControls();
+    let response = '';
+    try {
+      const stream = await state.engine.chat.completions.create({
+        model: modelId,
+        messages,
+        stream: true,
+        temperature: 0.22,
+        top_p: 0.82,
+        max_tokens: 420,
+        extra_body: { enable_thinking: false }
+      });
+      for await (const chunk of stream) {
+        if (requestId !== state.requestId) break;
+        const delta = chunk && chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+        if (delta && typeof delta.content === 'string') response += delta.content;
+      }
+      if (requestId !== state.requestId) throw new Error('تولید پیش‌نویس متوقف شد.');
+      const final = visibleAnswer(response).trim();
+      if (!final) throw new Error('مدل پاسخ متنی نساخت.');
+      return final;
+    } finally {
+      if (requestId === state.requestId || state.stopping) {
+        state.generating = false;
+        state.stopping = false;
+      }
+      updateControls();
+    }
+  }
+
+  function returnToCaller() {
+    const onReturn = state.returnAction;
+    if (typeof onReturn !== 'function') return;
+    state.returnAction = null;
+    if (typeof window.appBack === 'function') window.appBack();
+    onReturn();
+  }
+
+  function openLocalChat(options = {}) {
+    state.returnAction = options && typeof options.onReturn === 'function' ? options.onReturn : null;
     if (typeof window.showT === 'function') window.showT('مکالمهٔ فارسی آفلاین', 'مدل زبانی محلی؛ بدون API گفت‌وگو');
     else if (typeof window.show === 'function') window.show('tool', true, 'مدل زبانی محلی');
     render();
@@ -495,4 +557,6 @@
   }
 
   window.openLocalChat = openLocalChat;
+  window.getLocalChatStatus = getLocalChatStatus;
+  window.generateLocalChatDraft = generateLocalChatDraft;
 })();

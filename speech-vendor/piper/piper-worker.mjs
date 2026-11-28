@@ -2,7 +2,7 @@
 import * as ort from './ort.min.mjs';
 import { createPiperPhonemize } from './piper-phonemize.mjs';
 import { getStoredVoice } from './store.mjs';
-import { createPiperWavBuffer, normalizePersianTtsText, piperInputIds, validatePersianPiperConfig } from './core.mjs';
+import { createPiperWavBuffer, normalizePersianTtsText, pauseAfterPiperChunk, piperInputIds, validatePersianPiperConfig } from './core.mjs';
 
 const VOICE_IDS = new Set(['fa_IR-amir-medium', 'fa_IR-gyro-medium']);
 let phonemizerPromise = null;
@@ -141,7 +141,7 @@ async function inferChunk(text, rate) {
 }
 
 async function synthesize(message) {
-  const { requestId, voiceId, chunks, rate } = message;
+  const { requestId, voiceId, chunks, rate, pauseScale } = message;
   if (!Number.isSafeInteger(requestId) || !VOICE_IDS.has(voiceId) || !Array.isArray(chunks) || !chunks.length) {
     throw new Error('درخواست ساخت گفتار فارسی معتبر نیست.');
   }
@@ -157,7 +157,9 @@ async function synthesize(message) {
     sampleRate = result.sampleRate;
     audioChunks.push(result.samples);
   }
-  const wav = createPiperWavBuffer(audioChunks, sampleRate, 110);
+  const safePauseScale = Number.isFinite(Number(pauseScale)) ? Math.max(0.6, Math.min(1.8, Number(pauseScale))) : 1;
+  const pausesMs = cleanChunks.slice(0, -1).map(chunk => Math.min(2600, Math.round(pauseAfterPiperChunk(chunk) * safePauseScale)));
+  const wav = createPiperWavBuffer(audioChunks, sampleRate, pausesMs);
   postProgress(requestId, 'complete', cleanChunks.length, cleanChunks.length, 'ساخت صدای عصبی فارسی کامل شد.');
   self.postMessage({ type: 'complete', requestId, wav }, [wav]);
 }

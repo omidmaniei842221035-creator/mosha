@@ -124,7 +124,8 @@ async function synthesize(message) {
     throw new Error('درخواست گفتار tiny-ava معتبر نیست.');
   }
   await loadModel(requestId);
-  const segments = segmentTinyAvaText(text, 180, { autoTextProsody: !settings.style || settings.style === 'auto' });
+  const autoTextProsody = settings.autoTextProsody !== false && (!settings.style || settings.style === 'auto');
+  const segments = segmentTinyAvaText(text, 180, { autoTextProsody });
   if (!segments.length) throw new Error('متنی برای خواندن باقی نماند.');
   const speed = clamp(settings && settings.speed, 0.7, 1.4, 1);
   const pitchShift = clamp(settings && settings.pitchShift, -0.25, 0.25, 0);

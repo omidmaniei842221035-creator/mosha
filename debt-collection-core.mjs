@@ -90,7 +90,7 @@ export function selectDebtSpeechProfile(interaction = 'general', tone = '') {
     tone: chosenTone,
     style,
     label: DELIVERY_LABELS[style],
-    expressiveness: style === 'auto' ? 1.0 : 0.98,
+    expressiveness: style === 'auto' ? 1.0 : 1.12,
     pauseScale: 1.0,
     automaticCues: Object.freeze(['مکث بر پایهٔ نشانه‌گذاری', 'تأکید ملایم روی عددها و واژه‌های کلیدی']),
     basis: 'فقط برچسب تعامل و لحن انتخابی؛ نه ویژگی‌های صوتی یا تشخیص احساس مشتری'

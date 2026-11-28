@@ -32,6 +32,43 @@ export const TINY_AVA_VOICES = Object.freeze({
   mana: Object.freeze({ title: 'مانا · صدای مردانهٔ استودیویی', modelIndex: 2 })
 });
 
+const LOCAL_SPEECH_STYLE_PRESETS = Object.freeze({
+  auto: Object.freeze({ speed: 1, pitchShift: 0, pitchRange: 1, pauseScale: 1 }),
+  conversational: Object.freeze({ speed: 1.06, pitchShift: 0.05, pitchRange: 1.22, pauseScale: 0.9 }),
+  formal: Object.freeze({ speed: 0.9, pitchShift: -0.04, pitchRange: 0.78, pauseScale: 1.32 }),
+  calm: Object.freeze({ speed: 0.88, pitchShift: -0.045, pitchRange: 0.78, pauseScale: 1.38 }),
+  supportive: Object.freeze({ speed: 0.93, pitchShift: 0.025, pitchRange: 1.15, pauseScale: 1.25 }),
+  happy: Object.freeze({ speed: 1.08, pitchShift: 0.06, pitchRange: 1.28, pauseScale: 0.88 }),
+  sad: Object.freeze({ speed: 0.84, pitchShift: -0.07, pitchRange: 0.74, pauseScale: 1.42 }),
+  angry: Object.freeze({ speed: 1.1, pitchShift: 0.045, pitchRange: 1.3, pauseScale: 0.84 }),
+  excited: Object.freeze({ speed: 1.14, pitchShift: 0.085, pitchRange: 1.35, pauseScale: 0.78 }),
+  storytelling: Object.freeze({ speed: 0.92, pitchShift: 0, pitchRange: 1.18, pauseScale: 1.28 }),
+  lively: Object.freeze({ speed: 1.1, pitchShift: 0.04, pitchRange: 1.27, pauseScale: 0.86 })
+});
+
+/** Map one local delivery style to each offline engine's real speed/pitch/pause controls. */
+export function resolveLocalSpeechDelivery(style = 'auto', {
+  rate = 1, pitch = 1, expressiveness = 1.05, pauseScale = 1
+} = {}) {
+  const styleName = Object.prototype.hasOwnProperty.call(LOCAL_SPEECH_STYLE_PRESETS, style) ? style : 'auto';
+  const preset = LOCAL_SPEECH_STYLE_PRESETS[styleName];
+  const clamp = (value, minimum, maximum, fallback) => {
+    const number = Number(value);
+    return Math.max(minimum, Math.min(maximum, Number.isFinite(number) ? number : fallback));
+  };
+  const expression = clamp(expressiveness, 0.7, 1.4, 1.05);
+  const pitchShift = clamp(Math.log(Math.max(0.5, clamp(pitch, 0.8, 1.2, 1))) + preset.pitchShift * expression, -0.25, 0.25, 0);
+  return Object.freeze({
+    style: styleName,
+    speed: clamp(clamp(rate, 0.75, 1.25, 1) * preset.speed, 0.7, 1.4, 1),
+    pitchShift,
+    pitch: clamp(Math.exp(pitchShift), 0.8, 1.2, 1),
+    pitchRange: clamp(preset.pitchRange * expression, 0.7, 1.4, 1.05),
+    pauseScale: clamp(preset.pauseScale * clamp(pauseScale, 0.6, 1.8, 1), 0.6, 1.8, 1),
+    autoTextProsody: styleName === 'auto'
+  });
+}
+
 const SYMBOLS = Object.freeze([
   '<pad>', '<bos>', '<eos>', '<sp>', '<unk>',
   ',', '.', '?', '!', ';', ':', '"', "'", '(', ')', '—', '…',

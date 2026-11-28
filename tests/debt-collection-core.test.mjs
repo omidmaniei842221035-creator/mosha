@@ -100,7 +100,7 @@ test('prompt builder gates verified financial context and sanitizes technical vo
   });
   const payload = JSON.parse(unverified[1].content);
   assert.equal(payload.speechDeliveryProfile.style, 'supportive');
-  assert.equal(payload.speechDeliveryProfile.expressiveness, 0.98);
+  assert.equal(payload.speechDeliveryProfile.expressiveness, 1.12);
   assert.equal(payload.speechDeliveryProfile.automaticCues.length, 2);
   assert.match(unverified[0].content, /نشانه‌های فنیِ اجرا/u);
   assert.equal(payload.verifiedBankFacts, null);

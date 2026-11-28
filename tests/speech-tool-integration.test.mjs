@@ -7,6 +7,32 @@ const core = await readFile(new URL('../speech-vendor/tiny-ava/core.mjs', import
 const worker = await readFile(new URL('../speech-vendor/tiny-ava/tiny-ava-worker.mjs', import.meta.url), 'utf8');
 const piperWorker = await readFile(new URL('../speech-vendor/piper/piper-worker.mjs', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
+const deliveryCore = await import('../speech-vendor/tiny-ava/core.mjs');
+
+test('maps delivery profiles to distinct local speed, pitch, and pause controls', () => {
+  const options = { rate: 1, pitch: 1, expressiveness: 1.12, pauseScale: 1 };
+  const formal = deliveryCore.resolveLocalSpeechDelivery('formal', options);
+  const supportive = deliveryCore.resolveLocalSpeechDelivery('supportive', options);
+  const conversational = deliveryCore.resolveLocalSpeechDelivery('conversational', options);
+  assert.ok(formal.speed < supportive.speed && supportive.speed < conversational.speed);
+  assert.ok(formal.pitch < supportive.pitch && supportive.pitch < conversational.pitch);
+  assert.ok(formal.pitchRange < supportive.pitchRange && supportive.pitchRange < conversational.pitchRange);
+  assert.ok(formal.pauseScale > supportive.pauseScale && supportive.pauseScale > conversational.pauseScale);
+  assert.ok(conversational.speed - formal.speed >= 0.15);
+  assert.ok(conversational.pitch - formal.pitch >= 0.08);
+  assert.ok(conversational.pitchRange - formal.pitchRange >= 0.45);
+  assert.equal(deliveryCore.resolveLocalSpeechDelivery('unknown', options).style, 'auto');
+  assert.equal(deliveryCore.resolveLocalSpeechDelivery('auto', options).autoTextProsody, true);
+  assert.equal(formal.autoTextProsody, false);
+  assert.match(tool, /speechDeliverySettings\(speechCore\)/u);
+  assert.match(worker, /settings\.autoTextProsody !== false/u);
+  assert.match(tool, /startTinyAvaSpeech\(text, session, selected, delivery\)/u);
+  assert.match(tool, /startPiperSpeech\(text, session, selected, delivery\)/u);
+  assert.match(tool, /startBundledSpeech\(text, session, delivery\)/u);
+  assert.match(tool, /utterance\.rate = delivery\.speed/u);
+  assert.match(tool, /utterance\.pitch = delivery\.pitch/u);
+  assert.match(piperWorker, /pauseAfterPiperChunk\(chunk\) \* safePauseScale/u);
+});
 
 test('keeps intra-sentence punctuation inside a single tiny-ava model segment', () => {
   assert.match(core, /TINY_AVA_PAUSE_AFTER_SENTENCE/u);
@@ -23,13 +49,16 @@ test('offers sentence-aware prosody and a locally saved pronunciation lexicon', 
   assert.match(tool, /id="speechTtsLexicon"/u);
   assert.match(tool, /id="speechTinyAvaEmphasis"/u);
   assert.match(tool, /value="supportive"/u);
+  assert.match(tool, /id="speechDeliveryStyleControls"/u);
+  assert.match(tool, /deliveryStyleControls\.hidden = !selected/u);
+  assert.match(tool, /tinyAvaCueBar\.hidden = !usesTinyAva/u);
   assert.match(tool, /id="speechDebtHandoff"/u);
   assert.match(tool, /applyPendingSpeechLaunch\(\)/u);
   assert.match(tool, /returnToDebtCollection/u);
   assert.match(tool, /wrapTinyAvaEmphasisCue/u);
   assert.match(tool, /\[\[تأکید:\$\{selectedText\}\]\]/u);
   assert.match(tool, /localStorage\.setItem\(LEXICON_KEY, raw\)/u);
-  assert.match(tool, /core\.applyPersianPronunciationLexicon\(rawText, entries\)/u);
+  assert.match(tool, /speechCore\.applyPersianPronunciationLexicon\(rawText, entries\)/u);
   assert.match(core, /not model fine-tuning/u);
 });
 
@@ -44,8 +73,8 @@ test('prefers the local neural Persian voice unless an explicit voice choice was
 
 test('uses punctuation-sensitive pauses for Piper and advances the offline shell cache', () => {
   assert.match(piperWorker, /pauseAfterPiperChunk/u);
-  assert.match(piperWorker, /cleanChunks\.slice\(0, -1\)\.map\(pauseAfterPiperChunk\)/u);
-  assert.match(serviceWorker, /shahr-advisor-pc-v44/u);
+  assert.match(piperWorker, /cleanChunks\.slice\(0, -1\)\.map\(chunk => Math\.min\(2600, Math\.round\(pauseAfterPiperChunk\(chunk\) \* safePauseScale\)\)\)/u);
+  assert.match(serviceWorker, /shahr-advisor-pc-v45/u);
   for (const path of ['speech-tool.js', 'speech-vendor/tiny-ava/core.mjs', 'speech-vendor/piper/piper-worker.mjs', 'speech-vendor/piper/core.mjs']) {
     assert.ok(serviceWorker.includes(`'./${path}'`), `missing ${path} from the offline shell`);
   }

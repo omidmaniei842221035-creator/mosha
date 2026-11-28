@@ -206,10 +206,10 @@
                 <label for="speechPitch">زیر و بمی صدا <b id="speechPitchValue">۱٫۰۰</b></label>
                 <input id="speechPitch" type="range" min="0.8" max="1.2" step="0.05" value="1" aria-label="زیر و بمی صدا" disabled>
               </div>
-              <div id="speechTinyAvaStyleControls" class="speech-tiny-ava-controls" hidden>
+              <div id="speechDeliveryStyleControls" class="speech-delivery-controls" hidden>
                 <div class="speech-setting">
                   <label for="speechTtsStyle">حالت لحن <small>پیش‌فرض: نشانه‌گذاریِ جمله‌محور</small></label>
-                  <select id="speechTtsStyle" class="inp" disabled aria-label="حالت لحن تقریبی tiny-ava">
+                  <select id="speechTtsStyle" class="inp" disabled aria-label="حالت لحن تقریبی صدای محلی">
                     <option value="auto">خوانش خودکار و جمله‌محور · پیش‌فرض</option>
                     <option value="conversational">مکالمه‌ای و طبیعی</option>
                     <option value="formal">رسمی و شمرده</option>
@@ -225,13 +225,13 @@
                 </div>
                 <div class="speech-setting">
                   <label for="speechTtsExpressiveness">شدت آهنگ <b id="speechTtsExpressivenessValue">۱٫۰۵</b></label>
-                  <input id="speechTtsExpressiveness" type="range" min="0.7" max="1.4" step="0.05" value="1.05" aria-label="شدت تقریبی آهنگ tiny-ava" disabled>
+                  <input id="speechTtsExpressiveness" type="range" min="0.7" max="1.4" step="0.05" value="1.05" aria-label="شدت تقریبی آهنگ صدای محلی" disabled>
                 </div>
                 <div class="speech-setting">
                   <label for="speechTtsPauseScale">میزان مکث‌ها <b id="speechTtsPauseScaleValue">۱٫۰۰×</b></label>
                   <input id="speechTtsPauseScale" type="range" min="0.6" max="1.8" step="0.1" value="1" aria-label="میزان مکث‌ها در خوانش tiny-ava" disabled>
                 </div>
-                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند الگوی متنیِ روشن برای لحن رسمی، سپاس/تبریک، همدلی یا تأکید، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این تحلیل قاعده‌محور و تقریبی است، نه درک قطعی احساس یا نیت. presetهای شاد/غمگین/عصبانی و حالت همدلانهٔ حرفه‌ای فقط نگاشت تقریبیِ سرعت، زیر و بمی و مکث‌اند؛ مدل احساس مشتری را تشخیص نمی‌دهد. برای نجوا، خنده و تنفس واقعی آموزش ندیده است.</div>
+                <div class="speech-style-caveat">پروفایل انتخابی در همهٔ صداهای محلی سرعت و زیر‌وبمیِ پشتیبانی‌شده را تغییر می‌دهد؛ میزان مکث و دامنهٔ آهنگ به موتور بستگی دارد. tiny-ava علاوه بر این، مکث دقیق و تأکید واژگانی دارد؛ Piper/eSpeak امکانات محدودتری دارند. حالت خودکار و الگوهای متنی قاعده‌محور و تقریبی‌اند، نه تشخیص قطعی احساس یا نیت؛ مدل احساس مشتری را تشخیص نمی‌دهد.</div>
               </div>
             </div>
 
@@ -1430,27 +1430,27 @@
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
     const voiceSelect = byId('speechVoice');
-    const tinyAvaStyleControls = byId('speechTinyAvaStyleControls');
+    const deliveryStyleControls = byId('speechDeliveryStyleControls');
     const tinyAvaCueBar = byId('speechTinyAvaCueBar');
-    const tinyAvaStyle = byId('speechTtsStyle');
-    const tinyAvaExpressiveness = byId('speechTtsExpressiveness');
-    const tinyAvaPauseScale = byId('speechTtsPauseScale');
+    const deliveryStyle = byId('speechTtsStyle');
+    const deliveryExpressiveness = byId('speechTtsExpressiveness');
+    const deliveryPauseScale = byId('speechTtsPauseScale');
     const piperReady = !selected || selected.type !== 'piper' || state.piperVoiceIds.has(selected.id);
     const tinyAvaReady = !selected || selected.type !== 'tiny-ava' || state.tinyAvaInstalled;
     const usesTinyAva = !!(selected && selected.type === 'tiny-ava');
 
     if (rate) rate.disabled = !selected || state.ttsPreparing || state.ttsRunning;
     if (pitch) pitch.disabled = !selected || state.ttsPreparing || state.ttsRunning || selected.type === 'piper';
-    if (tinyAvaStyleControls) tinyAvaStyleControls.hidden = !usesTinyAva;
+    if (deliveryStyleControls) deliveryStyleControls.hidden = !selected;
     if (tinyAvaCueBar) {
       tinyAvaCueBar.hidden = !usesTinyAva;
       tinyAvaCueBar.querySelectorAll('button').forEach(button => {
         button.disabled = state.ttsPreparing || state.ttsRunning;
       });
     }
-    if (tinyAvaStyle) tinyAvaStyle.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
-    if (tinyAvaExpressiveness) tinyAvaExpressiveness.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
-    if (tinyAvaPauseScale) tinyAvaPauseScale.disabled = !usesTinyAva || state.ttsPreparing || state.ttsRunning;
+    if (deliveryStyle) deliveryStyle.disabled = !selected || state.ttsPreparing || state.ttsRunning;
+    if (deliveryExpressiveness) deliveryExpressiveness.disabled = !selected || state.ttsPreparing || state.ttsRunning;
+    if (deliveryPauseScale) deliveryPauseScale.disabled = !selected || state.ttsPreparing || state.ttsRunning;
     if (speak) speak.disabled = !selected || !hasText || !piperReady || !tinyAvaReady || state.ttsPreparing || state.ttsRunning;
     if (pause) pause.disabled = !audioPlaying && !(nativeSpeaking && !nativePaused);
     if (resume) resume.disabled = !audioPaused && !nativePaused;
@@ -1581,33 +1581,25 @@
     catch (_) { /* Preferences are optional; never block speech for storage errors. */ }
   }
 
-  function tinyAvaSynthesisSettings() {
+  function speechDeliverySettings(core) {
     const style = (byId('speechTtsStyle') || {}).value || 'auto';
-    const expressiveness = Number((byId('speechTtsExpressiveness') || {}).value || 1.05);
-    const userPauseScale = Number((byId('speechTtsPauseScale') || {}).value || 1);
-    const pitchRatio = Number((byId('speechPitch') || {}).value || 1);
-    const rate = Number((byId('speechRate') || {}).value || 1);
-    const presets = {
-      auto: { speed: 1, pitchShift: 0, pitchRange: 1, pauseScale: 1 },
-      conversational: { speed: 1, pitchShift: 0.005, pitchRange: 1.08, pauseScale: 1 },
-      formal: { speed: 0.96, pitchShift: 0, pitchRange: 0.92, pauseScale: 1.15 },
-      calm: { speed: 0.92, pitchShift: -0.02, pitchRange: 0.82, pauseScale: 1.32 },
-      supportive: { speed: 0.98, pitchShift: -0.005, pitchRange: 1.0, pauseScale: 1.08 },
-      happy: { speed: 1.025, pitchShift: 0.035, pitchRange: 1.22, pauseScale: 0.94 },
-      sad: { speed: 0.88, pitchShift: -0.045, pitchRange: 0.78, pauseScale: 1.38 },
-      angry: { speed: 1.055, pitchShift: 0.018, pitchRange: 1.28, pauseScale: 0.9 },
-      excited: { speed: 1.1, pitchShift: 0.06, pitchRange: 1.35, pauseScale: 0.82 },
-      storytelling: { speed: 0.94, pitchShift: 0, pitchRange: 1.14, pauseScale: 1.28 },
-      lively: { speed: 1.07, pitchShift: 0.02, pitchRange: 1.25, pauseScale: 0.9 }
+    const options = {
+      rate: Number((byId('speechRate') || {}).value || 1),
+      pitch: Number((byId('speechPitch') || {}).value || 1),
+      expressiveness: Number((byId('speechTtsExpressiveness') || {}).value || 1.05),
+      pauseScale: Number((byId('speechTtsPauseScale') || {}).value || 1)
     };
-    const preset = presets[style] || presets.conversational;
-    const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(maximum, value));
+    if (core && typeof core.resolveLocalSpeechDelivery === 'function') {
+      return core.resolveLocalSpeechDelivery(style, options);
+    }
     return {
-      speed: clamp(rate * preset.speed, 0.7, 1.4),
-      pitchShift: clamp(Math.log(Math.max(0.5, pitchRatio)) + preset.pitchShift * expressiveness, -0.25, 0.25),
-      pitchRange: clamp(preset.pitchRange * expressiveness, 0.7, 1.4),
-      pauseScale: clamp(preset.pauseScale * userPauseScale, 0.6, 1.8),
-      style
+      style,
+      speed: options.rate,
+      pitchShift: Math.log(Math.max(0.5, options.pitch)),
+      pitch: options.pitch,
+      pitchRange: 1,
+      pauseScale: options.pauseScale,
+      autoTextProsody: style === 'auto'
     };
   }
 
@@ -1755,17 +1747,19 @@
     updateTtsControls();
 
     let text = rawText;
+    let speechCore = null;
     try {
-      const core = await import('./speech-vendor/tiny-ava/core.mjs');
+      speechCore = await import('./speech-vendor/tiny-ava/core.mjs');
       let lexiconText = '';
       try { lexiconText = localStorage.getItem(LEXICON_KEY) || ''; }
       catch (_) { /* No saved pronunciation mapping is also a valid state. */ }
-      const entries = core.parsePersianPronunciationLexicon(lexiconText, 64);
-      text = core.applyPersianPronunciationLexicon(rawText, entries);
+      const entries = speechCore.parsePersianPronunciationLexicon(lexiconText, 64);
+      text = speechCore.applyPersianPronunciationLexicon(rawText, entries);
     } catch (error) {
       console.warn('Local pronunciation dictionary could not be applied; reading the original text:', error);
     }
     if (session !== state.ttsSession) return;
+    const delivery = speechDeliverySettings(speechCore);
     state.ttsPreparing = false;
     text = selected.type === 'tiny-ava' ? text : stripTinyAvaCues(text);
     if (!text) {
@@ -1781,7 +1775,7 @@
         updateTtsControls();
         return;
       }
-      startTinyAvaSpeech(text, session, selected);
+      startTinyAvaSpeech(text, session, selected, delivery);
       return;
     }
 
@@ -1792,7 +1786,7 @@
         updateTtsControls();
         return;
       }
-      startPiperSpeech(text, session, selected);
+      startPiperSpeech(text, session, selected, delivery);
       return;
     }
 
@@ -1805,20 +1799,21 @@
       }
       state.ttsChunks = speechChunks(text, 260);
       state.ttsChunkIndex = 0;
+      state.ttsSynthesisRate = delivery.speed;
       state.ttsRunning = true;
       setStatus('speechTtsStatus', 'خوانش با صدای فارسیِ محلیِ سیستم آغاز شد.', 'ready');
-      speakNextChunk(session, selected.voice);
+      speakNextChunk(session, selected.voice, delivery);
       updateTtsControls();
       return;
     }
 
-    startBundledSpeech(text, session);
+    startBundledSpeech(text, session, delivery);
   }
 
-  function startBundledSpeech(text, session) {
+  function startBundledSpeech(text, session, delivery) {
     state.ttsPreparing = true;
     state.ttsRunning = false;
-    const synthesisRate = Number((byId('speechRate') || {}).value || 1);
+    const synthesisRate = delivery.speed;
     state.ttsSynthesisRate = synthesisRate;
     setStatus('speechTtsStatus', 'در حال ساخت صدای فارسی در همین دستگاه؛ ممکن است بار نخست کمی زمان ببرد…', 'busy');
     updateTtsProgress(0, 1, 'در حال آماده‌سازی صدای آفلاین…');
@@ -1882,16 +1877,15 @@
     worker.postMessage({
       requestId: session,
       text,
-      rate: Number((byId('speechRate') || {}).value || 1),
-      pitch: Number((byId('speechPitch') || {}).value || 1)
+      rate: delivery.speed,
+      pitch: delivery.pitch
     });
     updateTtsControls();
   }
 
-  function startTinyAvaSpeech(text, session, selected) {
+  function startTinyAvaSpeech(text, session, selected, settings) {
     state.ttsPreparing = true;
     state.ttsRunning = false;
-    const settings = tinyAvaSynthesisSettings();
     state.ttsSynthesisRate = settings.speed;
     state.ttsChunks = [];
     state.ttsChunkIndex = 0;
@@ -1966,10 +1960,10 @@
     updateTtsControls();
   }
 
-  function startPiperSpeech(text, session, selected) {
+  function startPiperSpeech(text, session, selected, delivery) {
     state.ttsPreparing = true;
     state.ttsRunning = false;
-    state.ttsSynthesisRate = Number((byId('speechRate') || {}).value || 1);
+    state.ttsSynthesisRate = delivery.speed;
     const chunks = speechChunks(text, 240);
     state.ttsChunks = chunks;
     state.ttsChunkIndex = 0;
@@ -2037,7 +2031,8 @@
       requestId: session,
       voiceId: selected.id,
       chunks,
-      rate: state.ttsSynthesisRate
+      rate: state.ttsSynthesisRate,
+      pauseScale: delivery.pauseScale
     });
     updateTtsControls();
   }
@@ -2109,7 +2104,7 @@
     }
   }
 
-  function speakNextChunk(session, voice) {
+  function speakNextChunk(session, voice, delivery) {
     if (session !== state.ttsSession || !state.ttsRunning) return;
     const synth = window.speechSynthesis;
     if (!synth) return;
@@ -2125,8 +2120,8 @@
     const utterance = new window.SpeechSynthesisUtterance(state.ttsChunks[index]);
     utterance.voice = voice;
     utterance.lang = isPersianVoice(voice) ? voice.lang : LANGUAGE;
-    utterance.rate = Number((byId('speechRate') || {}).value || 1);
-    utterance.pitch = Number((byId('speechPitch') || {}).value || 1);
+    utterance.rate = delivery.speed;
+    utterance.pitch = delivery.pitch;
     utterance.volume = 1;
     updateTtsProgress(index, state.ttsChunks.length, `در حال خواندن، بخش ${faNumber(index + 1)} از ${faNumber(state.ttsChunks.length)}…`);
     utterance.onstart = () => {
@@ -2137,7 +2132,7 @@
     utterance.onend = () => {
       if (session !== state.ttsSession) return;
       updateTtsProgress(index + 1, state.ttsChunks.length, `در حال خواندن، بخش ${faNumber(index + 1)} از ${faNumber(state.ttsChunks.length)}…`);
-      window.setTimeout(() => speakNextChunk(session, voice), 45);
+      window.setTimeout(() => speakNextChunk(session, voice, delivery), Math.round(45 * delivery.pauseScale));
     };
     utterance.onerror = event => {
       if (session !== state.ttsSession) return;

@@ -154,7 +154,7 @@ async function synthesize(message) {
       stress: new ort.Tensor('int64', BigInt64Array.from(phonemes.stress.map(BigInt)), [1, tokenCount]),
       voice: new ort.Tensor('int64', BigInt64Array.from([BigInt(selectedVoice.modelIndex)]), [1]),
       speed: new ort.Tensor('float32', Float32Array.from([clamp(speed * (Number(segment.speedScale) || 1), 0.7, 1.4, speed)]), [1]),
-      pitch_shift: new ort.Tensor('float32', Float32Array.from([pitchShift]), [1]),
+      pitch_shift: new ort.Tensor('float32', Float32Array.from([clamp(pitchShift + (Number(segment.pitchShiftOffset) || 0), -0.25, 0.25, pitchShift)]), [1]),
       pitch_range: new ort.Tensor('float32', Float32Array.from([clamp(pitchRange * (Number(segment.pitchRangeScale) || 1), 0.7, 1.4, pitchRange)]), [1])
     });
     const audio = output && output.audio && output.audio.data;

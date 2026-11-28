@@ -48,6 +48,17 @@ export function piperInputIds(phonemeResult) {
   return BigInt64Array.from(ids, id => BigInt(id));
 }
 
+export function pauseAfterPiperChunk(text) {
+  const value = String(text || '').trimEnd().replace(/["')\]»”’}]+$/u, '').trimEnd();
+  const ending = value.slice(-1);
+  if (ending === '?' || ending === '؟') return 250;
+  if (ending === '!') return 210;
+  if (ending === '…') return 360;
+  if (ending === '.' || ending === '؛' || ending === ';') return 180;
+  if (ending === ':' || ending === '،' || ending === ',') return 110;
+  return 28;
+}
+
 export async function sha256Hex(value) {
   const subtle = globalThis.crypto && globalThis.crypto.subtle;
   if (!subtle || typeof subtle.digest !== 'function') {

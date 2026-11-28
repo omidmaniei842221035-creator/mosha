@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   createPiperWavBuffer,
   normalizePersianTtsText,
+  pauseAfterPiperChunk,
   piperInputIds,
   sha256Hex,
   validatePersianPiperConfig,
@@ -25,6 +26,11 @@ assert.equal(await sha256Hex(new TextEncoder().encode('test').buffer), '9f86d081
 assert.equal(await sha256Hex(new Blob(['test'])), '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08');
 assert.deepEqual([...piperInputIds({ phoneme_ids: [0, 2, 1] })], [0n, 2n, 1n]);
 assert.throws(() => piperInputIds({ phoneme_ids: [] }), /مدل آوایی/);
+assert.equal(pauseAfterPiperChunk('آماده‌ای؟'), 250);
+assert.equal(pauseAfterPiperChunk('آماده‌ای؟ ” '), 250, 'closing quotes and their whitespace keep sentence timing');
+assert.equal(pauseAfterPiperChunk('سلام،'), 110);
+assert.equal(pauseAfterPiperChunk('پایان.'), 180);
+assert.equal(pauseAfterPiperChunk('واژه'), 28);
 assert.throws(() => validatePiperVoiceConfig({}), /نرخ نمونه‌برداری/);
 
 const wav = createPiperWavBuffer([Float32Array.from([0, -1, 1]), Float32Array.from([0.5])], 22050, 10);

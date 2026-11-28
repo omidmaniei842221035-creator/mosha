@@ -177,11 +177,98 @@ export function normalizeTinyAvaText(value) {
   return expandPersianNumbers(mapped).replace(/\s+/gu, ' ').trim();
 }
 
-const TINY_AVA_PAUSE_AFTER_PUNCTUATION = Object.freeze({
-  ',': 135, '،': 135, ':': 185, ';': 235, '؛': 235, '—': 245,
+function normalizePronunciationText(value) {
+  return String(value || '').normalize('NFC')
+    .replace(/[يى]/gu, 'ی')
+    .replace(/ك/gu, 'ک')
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function normalizePronunciationInput(value) {
+  return String(value || '').normalize('NFC')
+    .replace(/[يى]/gu, 'ی')
+    .replace(/ك/gu, 'ک')
+    .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, '')
+    .replace(/\r\n?/gu, '\n')
+    .replace(/[\t\f\v ]+/gu, ' ')
+    .replace(/ *\n */gu, '\n')
+    .trim();
+}
+
+/** Parse local, user-edited `word = preferred pronunciation` entries. This is a pronunciation dictionary, not model fine-tuning. */
+export function parsePersianPronunciationLexicon(value, maxEntries = 64) {
+  const entries = new Map();
+  const limit = Math.max(1, Math.min(128, Math.trunc(Number(maxEntries) || 64)));
+  for (const rawLine of String(value || '').split(/\r?\n/u)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const separator = line.match(/^(.*?)\s*(?:=>|→|=)\s*(.+)$/u);
+    if (!separator) continue;
+    const source = normalizePronunciationText(separator[1]);
+    const spoken = normalizePronunciationText(separator[2]);
+    if (!source || !spoken || source.length > 80 || spoken.length > 120 || /\[\[|\]\]/u.test(spoken)) continue;
+    entries.set(source, spoken);
+    if (entries.size >= limit) break;
+  }
+  return Array.from(entries, ([source, spoken]) => ({ source, spoken }))
+    .sort((left, right) => right.source.length - left.source.length);
+}
+
+/** Apply user-approved pronunciation substitutions locally, without editing model weights or activating inline cues. */
+export function applyPersianPronunciationLexicon(value, entries = []) {
+  const text = normalizePronunciationInput(value);
+  const safeEntries = Array.from(entries || []).filter(entry => entry && typeof entry.source === 'string' && typeof entry.spoken === 'string')
+    .map(entry => ({ source: normalizePronunciationText(entry.source), spoken: normalizePronunciationText(entry.spoken) }))
+    .filter(entry => entry.source && entry.spoken && !/[\[\]]/u.test(entry.spoken))
+    .sort((left, right) => right.source.length - left.source.length);
+  if (!safeEntries.length || !text) return text;
+
+  const escapePattern = value => value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const pattern = safeEntries.map(entry => escapePattern(entry.source).replace(/\s+/gu, '\\s+')).join('|');
+  const lookup = new Map(safeEntries.map(entry => [entry.source.toLocaleLowerCase(), entry.spoken]));
+  const matcher = new RegExp(`(^|[^\\p{L}\\p{N}\\u200c])(${pattern})(?=$|[^\\p{L}\\p{N}\\u200c])`, 'giu');
+  let output = '';
+  let cursor = 0;
+  const cues = /\[\[[\s\S]*?\]\]/gu;
+  let cue;
+  const applyEntries = segment => segment.replace(matcher, (_match, boundary, spokenSource) =>
+    `${boundary}${lookup.get(normalizePronunciationText(spokenSource).toLocaleLowerCase()) || spokenSource}`);
+  while ((cue = cues.exec(text))) {
+    output += applyEntries(text.slice(cursor, cue.index)) + cue[0];
+    cursor = cue.index + cue[0].length;
+  }
+  return output + applyEntries(text.slice(cursor));
+}
+
+const TINY_AVA_PAUSE_AFTER_SENTENCE = Object.freeze({
   '.': 330, '!': 365, '?': 390, '؟': 390, '…': 540
 });
 const TINY_AVA_CLOSING_PUNCTUATION = new Set(['"', "'", ')', ']', '}', '»', '”', '’']);
+
+function tinyAvaSentenceProsody(text, baseOptions = {}) {
+  const value = String(text || '').trimEnd();
+  const normalized = normalizePronunciationText(value);
+  const last = Array.from(value).reverse().find(character => !TINY_AVA_CLOSING_PUNCTUATION.has(character)) || '';
+  const contour = last === '?' || last === '؟'
+    ? { speedScale: 0.985, pitchShiftOffset: 0.018, pitchRangeScale: 1.08 }
+    : last === '!'
+      ? { speedScale: 1.025, pitchShiftOffset: 0.025, pitchRangeScale: 1.12 }
+      : last === '…'
+        ? { speedScale: 0.94, pitchShiftOffset: -0.018, pitchRangeScale: 0.94 }
+        : /(?:تبریک|آفرین|ممنون|سپاس|خوشحال)/u.test(normalized)
+          ? { speedScale: 1.01, pitchShiftOffset: 0.012, pitchRangeScale: 1.06 }
+          : /(?:متاسفم|متأسفم|تسلیت|نگران|دشواری|سختی)/u.test(normalized)
+            ? { speedScale: 0.95, pitchShiftOffset: -0.018, pitchRangeScale: 0.92 }
+            : { speedScale: 1, pitchShiftOffset: 0, pitchRangeScale: 1 };
+  return {
+    ...baseOptions,
+    speedScale: (Number(baseOptions.speedScale) || 1) * contour.speedScale,
+    pitchShiftOffset: (Number(baseOptions.pitchShiftOffset) || 0) + contour.pitchShiftOffset,
+    pitchRangeScale: (Number(baseOptions.pitchRangeScale) || 1) * contour.pitchRangeScale
+  };
+}
 
 function tinyAvaSegment(text, pauseAfterMs, options) {
   return {
@@ -190,6 +277,7 @@ function tinyAvaSegment(text, pauseAfterMs, options) {
     pauseAfterMs: Math.max(0, Math.round(Number(pauseAfterMs) || 0)),
     pauseBeforeMs: 0,
     speedScale: Number(options.speedScale) || 1,
+    pitchShiftOffset: Number(options.pitchShiftOffset) || 0,
     pitchRangeScale: Number(options.pitchRangeScale) || 1
   };
 }
@@ -210,14 +298,14 @@ function appendBoundedTinyAvaSegment(output, rawText, pauseAfterMs, options, max
     fragment = '';
   };
   for (const word of words) {
-    if (fragment && `${fragment} ${word}`.length > maxChars) flush(85);
+    if (fragment && `${fragment} ${word}`.length > maxChars) flush(30);
     if (!fragment && word.length > maxChars) {
       // Extremely long unspaced text is split to keep G2P/ONNX input bounded.
       const characters = Array.from(word);
       for (let offset = 0; offset < characters.length; offset += maxChars) {
         const part = characters.slice(offset, offset + maxChars).join('');
         const finalPart = offset + maxChars >= characters.length;
-        output.push(tinyAvaSegment(part, finalPart ? pauseAfterMs : 85, options));
+        output.push(tinyAvaSegment(part, finalPart ? pauseAfterMs : 30, options));
       }
       continue;
     }
@@ -234,19 +322,19 @@ function splitTinyAvaLine(value, options, maxChars) {
   for (let index = 0; index < line.length; index++) {
     const character = line[index];
     buffer += character;
-    if (!Object.prototype.hasOwnProperty.call(TINY_AVA_PAUSE_AFTER_PUNCTUATION, character)) continue;
-    let pause = TINY_AVA_PAUSE_AFTER_PUNCTUATION[character];
+    if (!Object.prototype.hasOwnProperty.call(TINY_AVA_PAUSE_AFTER_SENTENCE, character)) continue;
+    let pause = TINY_AVA_PAUSE_AFTER_SENTENCE[character];
     let next = index + 1;
-    while (next < line.length && Object.prototype.hasOwnProperty.call(TINY_AVA_PAUSE_AFTER_PUNCTUATION, line[next])) {
+    while (next < line.length && Object.prototype.hasOwnProperty.call(TINY_AVA_PAUSE_AFTER_SENTENCE, line[next])) {
       buffer += line[next];
-      pause = Math.max(pause, TINY_AVA_PAUSE_AFTER_PUNCTUATION[line[next]]);
+      pause = Math.max(pause, TINY_AVA_PAUSE_AFTER_SENTENCE[line[next]]);
       next++;
     }
     while (next < line.length && TINY_AVA_CLOSING_PUNCTUATION.has(line[next])) {
       buffer += line[next];
       next++;
     }
-    appendBoundedTinyAvaSegment(output, buffer, pause, options, maxChars);
+    appendBoundedTinyAvaSegment(output, buffer, pause, tinyAvaSentenceProsody(buffer, options), maxChars);
     buffer = '';
     index = next - 1;
   }
@@ -255,20 +343,18 @@ function splitTinyAvaLine(value, options, maxChars) {
 }
 
 function splitTinyAvaPlainText(value, options, maxChars) {
-  const lines = String(value || '').replace(/\r\n?/gu, '\n').split('\n');
+  const paragraphs = String(value || '').replace(/\r\n?/gu, '\n').split(/\n[ \t]*\n+/u);
   const output = [];
-  for (let index = 0; index < lines.length; index++) {
-    const lineSegments = splitTinyAvaLine(lines[index], options, maxChars);
-    if (!lineSegments.length) continue;
-    let nextNonEmpty = index + 1;
-    while (nextNonEmpty < lines.length && !lines[nextNonEmpty].trim()) nextNonEmpty++;
-    if (nextNonEmpty < lines.length) {
-      const blankLines = nextNonEmpty - index - 1;
-      const lineBreakPause = blankLines ? 610 + Math.min(2, blankLines - 1) * 120 : 245;
-      const last = lineSegments[lineSegments.length - 1];
-      last.pauseAfterMs = Math.max(last.pauseAfterMs, lineBreakPause);
+  for (let index = 0; index < paragraphs.length; index++) {
+    const paragraph = paragraphs[index].replace(/\n+/gu, ' ');
+    const paragraphSegments = splitTinyAvaLine(paragraph, options, maxChars);
+    if (!paragraphSegments.length) continue;
+    const hasFollowingParagraph = paragraphs.slice(index + 1).some(block => block.trim());
+    if (hasFollowingParagraph) {
+      const last = paragraphSegments[paragraphSegments.length - 1];
+      last.pauseAfterMs = Math.max(last.pauseAfterMs, 610);
     }
-    output.push(...lineSegments);
+    output.push(...paragraphSegments);
   }
   return output;
 }

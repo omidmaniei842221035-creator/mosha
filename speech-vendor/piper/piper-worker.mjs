@@ -2,7 +2,7 @@
 import * as ort from './ort.min.mjs';
 import { createPiperPhonemize } from './piper-phonemize.mjs';
 import { getStoredVoice } from './store.mjs';
-import { createPiperWavBuffer, normalizePersianTtsText, piperInputIds, validatePersianPiperConfig } from './core.mjs';
+import { createPiperWavBuffer, normalizePersianTtsText, pauseAfterPiperChunk, piperInputIds, validatePersianPiperConfig } from './core.mjs';
 
 const VOICE_IDS = new Set(['fa_IR-amir-medium', 'fa_IR-gyro-medium']);
 let phonemizerPromise = null;
@@ -157,7 +157,8 @@ async function synthesize(message) {
     sampleRate = result.sampleRate;
     audioChunks.push(result.samples);
   }
-  const wav = createPiperWavBuffer(audioChunks, sampleRate, 110);
+  const pausesMs = cleanChunks.slice(0, -1).map(pauseAfterPiperChunk);
+  const wav = createPiperWavBuffer(audioChunks, sampleRate, pausesMs);
   postProgress(requestId, 'complete', cleanChunks.length, cleanChunks.length, 'ساخت صدای عصبی فارسی کامل شد.');
   self.postMessage({ type: 'complete', requestId, wav }, [wav]);
 }

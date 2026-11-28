@@ -8,6 +8,7 @@
 
   const LANGUAGE = 'fa-IR';
   const PREF_KEY = 'sca_speech_preferences';
+  const LEXICON_KEY = 'sca_speech_pronunciation_lexicon_v1';
   const BUNDLED_VOICE_ID = 'bundled-persian-espeak';
   const PIPER_VOICE_PREFIX = 'piper:';
   const PIPER_MODEL_BASE = 'https://huggingface.co/diffusionstudio/piper-voices/resolve/50f6de3c5afb40402551adb29d9e08dff2ec4624/';
@@ -44,6 +45,7 @@
     lastRecognitionError: '',
     voices: [],
     localPersianVoices: [],
+    voiceChoiceExplicit: false,
     ttsSession: 0,
     ttsRunning: false,
     ttsSessionUsed: false,
@@ -199,9 +201,10 @@
               </div>
               <div id="speechTinyAvaStyleControls" class="speech-tiny-ava-controls" hidden>
                 <div class="speech-setting">
-                  <label for="speechTtsStyle">حالت لحن <small>تقریبی، بدون تغییر واژه‌ها</small></label>
+                  <label for="speechTtsStyle">حالت لحن <small>پیش‌فرض: نشانه‌گذاریِ جمله‌محور</small></label>
                   <select id="speechTtsStyle" class="inp" disabled aria-label="حالت لحن تقریبی tiny-ava">
-                    <option value="conversational">مکالمه‌ای و طبیعی · پیش‌فرض</option>
+                    <option value="auto">خوانش خودکار و جمله‌محور · پیش‌فرض</option>
+                    <option value="conversational">مکالمه‌ای و طبیعی</option>
                     <option value="formal">رسمی و شمرده</option>
                     <option value="calm">آرام و ملایم</option>
                     <option value="happy">شاد و صمیمی</option>
@@ -220,7 +223,7 @@
                   <label for="speechTtsPauseScale">میزان مکث‌ها <b id="speechTtsPauseScaleValue">۱٫۰۰×</b></label>
                   <input id="speechTtsPauseScale" type="range" min="0.6" max="1.8" step="0.1" value="1" aria-label="میزان مکث‌ها در خوانش tiny-ava" disabled>
                 </div>
-                <div class="speech-style-caveat">حس‌هایی مثل خشم و شادی برچسبِ آموزش‌دیدهٔ مدل نیستند؛ فقط سرعت، زیر و بمی، گسترهٔ آهنگ و مکث تقریبی تنظیم می‌شود. نجوا، خنده و تنفس واقعی از مدل قابل تولید نیست.</div>
+                <div class="speech-style-caveat">حالت خودکار از نشانه‌گذاری و چند عبارت روشنِ سپاس/تبریک یا همدلی، تغییرات کوچک در سرعت و زیر‌وبمی می‌دهد؛ این راهنمای واژگانی محدود است، نه احساسِ آموزش‌دیده یا تشخیص حالت انسان. presetهای شاد/غمگین/عصبانی نیز فقط نگاشت تقریبی‌اند. برای نجوا، خنده و تنفس واقعی، مدل فعلی آموزش ندیده است.</div>
               </div>
             </div>
 
@@ -238,8 +241,19 @@
             <a id="speechTtsDownload" class="btn ghost speech-audio-download" download="گفتار-فارسی.wav" hidden>${icon('download', 15)} دریافت فایل WAV</a>
             <div id="speechTtsHint" class="speech-note warn">صدای عصبی tiny-ava هنوز در این دستگاه نصب نشده است؛ برای پریسا و مانا یک‌بار حدود ۴۳ MiB دریافت کنید. سپس گفتار روی همین دستگاه و بدون اینترنت ساخته می‌شود.</div>
             <details class="speech-details">
+              <summary>شخصی‌سازی آفلاینِ تلفظ واژه‌ها · واژه‌نامهٔ شخصی</summary>
+              <p>برای نام‌ها و واژه‌های خاص، هر خط را به‌شکل «واژه = خوانش دلخواه» بنویسید؛ مثلاً «کاظمی = کاظِمی». این واژه‌نامه فقط روی همین دستگاه ذخیره و پیش از گفتار اعمال می‌شود؛ وزن مدل را دوباره آموزش نمی‌دهد. اعراب‌گذاری در ستون خوانش به واج‌شناس فارسی کمک می‌کند.</p>
+              <label class="speech-live-label" for="speechTtsLexicon">واژه‌نامهٔ محلی <small>حداکثر ۶۴ مدخل · هر خط یک مدخل</small></label>
+              <textarea id="speechTtsLexicon" class="speech-textarea" dir="rtl" lang="fa" rows="4" maxlength="4000" placeholder="# نمونه\nکاظمی = کاظِمی\nمی‌خواهم = می‌خْواهم"></textarea>
+              <div class="speech-actions">
+                <button id="speechTtsLexiconSave" class="btn pri" type="button">${icon('check', 15)} ذخیرهٔ واژه‌نامه</button>
+                <button id="speechTtsLexiconClear" class="btn ghost" type="button">${icon('trash', 15)} پاک‌کردن</button>
+                <small id="speechTtsLexiconStatus" role="status" aria-live="polite">واژه‌نامهٔ شخصی فقط در حافظهٔ همین مرورگر می‌ماند.</small>
+              </div>
+            </details>
+            <details class="speech-details">
               <summary>تلفظ، لحن و مجوز صداها</summary>
-              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی استفاده کنید؛ عدد، ساعت و درصد نیز پیش از واج‌شناسی به واژه تبدیل می‌شوند. نشانه‌گذاری و خط‌ جدید مکث تقریبی می‌سازد. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
+              <p>برای کمک به تلفظ واژه‌های هم‌نگاره، می‌توانید در متن از حرکت‌گذاری فارسی استفاده کنید؛ عدد، ساعت و درصد نیز پیش از واج‌شناسی به واژه تبدیل می‌شوند. ویرگول و مکث‌های درون جمله داخل همان نوبت مدل خوانده می‌شوند تا پیوند واژه‌ها قطع نشود؛ پایان جمله، پرسش، تعجب و بند خالی مکث می‌سازد و حالت خودکار با پرسش، تعجب و چند عبارت روشنِ سپاس/تبریک یا همدلی آهنگ جمله را اندکی تنظیم می‌کند؛ این برداشت واژگانی محدود است، نه تشخیص احساس قطعی. در متن tiny-ava می‌توانید از [[مکث کوتاه]]، [[مکث]]، [[مکث بلند]]، [[کشیده:واژه]]، [[آه]]، [[اوه]]، [[هوم]] و [[نفس]] استفاده کنید؛ کشیده‌خوانی فقط کندترخواندن عبارت است، آواهای آه/اوه/هوم با همان واژه ساخته می‌شوند و نفس یک نویز مصنوعیِ نرم است، نه تنفس انسانیِ ضبط‌شده. حالت‌های رسمی، آرام، شاد، غمگین، عصبانی، هیجان‌زده و روایت‌گر نیز فقط نگاشت تقریبی سرعت، زیر و بمی و مکث‌اند؛ مدل برچسب احساس آموزش‌دیده ندارد و برنامه چیزی را خودکار به متن اضافه نمی‌کند. طبق <a href="https://github.com/mallahyari/tiny-ava/tree/v2.0.0" target="_blank" rel="noopener noreferrer">مستندات tiny-ava v2</a>، پریسا صدای زنانهٔ فارسی و مانا صدای مردانهٔ برگرفته از ضبط استودیوییِ انسانیِ مجموعهٔ <a href="https://huggingface.co/datasets/MahtaFetrat/Mana-TTS" target="_blank" rel="noopener noreferrer">Mana-TTS HIGH (CC0-1.0)</a> است؛ مانا صدای کاملاً مصنوعی نیست و در این برنامه به شخص نام‌دار یا مشهور نسبت داده نمی‌شود. مجوزهای اعلام‌شده: وزن مدل CC BY 4.0، مجموعهٔ Mana-TTS HIGH برابر CC0-1.0، و G2P برابر MIT؛ برای وزن‌ها انتساب <a href="https://huggingface.co/mehdi-hf/tiny-ava" target="_blank" rel="noopener noreferrer">«Powered by tiny-ava (Mehdi Allahyari / OncillaAI)»</a> لازم است. هویت و رضایت گوینده فراتر از اطلاعات مجوز بالادستی مستقلاً تأیید نشده است.</p>
             </details>
           </section>
         </div>
@@ -256,6 +270,7 @@
     else if (typeof window.show === 'function') window.show('tool', true, 'دیکته و خوانش با پردازش محلی روی همین دستگاه');
     document.querySelectorAll('.nav [data-speech-nav]').forEach(button => button.classList.add('on'));
     loadSpeechPreferences();
+    loadPronunciationLexicon();
     updateTranscriptCounters();
     updateTtsCounters();
     updateVoiceList();
@@ -292,6 +307,8 @@
     byButton('speechClean', cleanTranscript);
     byButton('speechClear', clearTranscript);
     byButton('speechSpeak', speakText);
+    byButton('speechTtsLexiconSave', savePronunciationLexicon);
+    byButton('speechTtsLexiconClear', clearPronunciationLexicon);
     byButton('speechPause', pauseSpeech);
     byButton('speechResume', resumeSpeech);
     byButton('speechTtsStop', () => stopSpeech(true));
@@ -300,6 +317,7 @@
 
     const voice = byId('speechVoice');
     if (voice) voice.addEventListener('change', () => {
+      state.voiceChoiceExplicit = true;
       if (state.piperWorker && !state.ttsPreparing && !state.ttsRunning) {
         try { state.piperWorker.terminate(); } catch (_) { /* no-op */ }
         state.piperWorker = null;
@@ -780,7 +798,7 @@
     select.replaceChildren();
 
     const tinyAvaGroup = document.createElement('optgroup');
-    tinyAvaGroup.label = 'tiny-ava v2 · پریسا و مانا، یک مدل مشترک و آفلاین';
+    tinyAvaGroup.label = 'پیشنهاد خوانش عصبی و پیوسته · tiny-ava v2، مدل مشترک و آفلاین';
     Object.entries(TINY_AVA_VOICES).forEach(([id, voice]) => {
       const option = document.createElement('option');
       option.value = `${TINY_AVA_VOICE_PREFIX}${id}`;
@@ -834,21 +852,26 @@
       ? String(prefs.voiceURI).slice(PIPER_VOICE_PREFIX.length)
       : '';
     const savedPiperExists = canUseNeuralVoice && Object.prototype.hasOwnProperty.call(PIPER_VOICES, savedPiperId);
-    const defaultValue = savedNativeVoice
-      ? savedNativeVoice.voiceURI
-      : savedTinyAvaExists
-        ? `${TINY_AVA_VOICE_PREFIX}${savedTinyAvaId}`
-        : savedPiperExists
-          ? `${PIPER_VOICE_PREFIX}${savedPiperId}`
-          : savedBundledVoice
+    const explicitVoiceChoice = prefs.voiceChoiceExplicit === true;
+    const defaultValue = savedTinyAvaExists
+      ? `${TINY_AVA_VOICE_PREFIX}${savedTinyAvaId}`
+      : savedPiperExists
+        ? `${PIPER_VOICE_PREFIX}${savedPiperId}`
+        : explicitVoiceChoice && savedNativeVoice
+          ? savedNativeVoice.voiceURI
+          : explicitVoiceChoice && savedBundledVoice
             ? BUNDLED_VOICE_ID
             : canUseNeuralVoice
               ? `${TINY_AVA_VOICE_PREFIX}${DEFAULT_TINY_AVA_VOICE}`
-              : canUseBundledVoice
-                ? BUNDLED_VOICE_ID
-                : state.localPersianVoices.length
-                  ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
-                  : '';
+              : savedNativeVoice
+                ? savedNativeVoice.voiceURI
+                : savedBundledVoice
+                  ? BUNDLED_VOICE_ID
+                  : canUseBundledVoice
+                    ? BUNDLED_VOICE_ID
+                    : state.localPersianVoices.length
+                      ? (state.localPersianVoices.find(voice => voice.default) || state.localPersianVoices[0]).voiceURI
+                      : '';
     select.value = defaultValue;
 
     updateVoiceGuidance();
@@ -1442,6 +1465,65 @@
     if (pauseScaleText && pauseScale) pauseScaleText.textContent = `${Number(pauseScale.value).toFixed(2).replace('.', '٫')}×`;
   }
 
+  function setPronunciationLexiconStatus(message, kind = 'idle') {
+    const node = byId('speechTtsLexiconStatus');
+    if (!node) return;
+    node.textContent = message;
+    node.dataset.state = kind;
+  }
+
+  function loadPronunciationLexicon() {
+    const area = byId('speechTtsLexicon');
+    if (!area) return;
+    try { area.value = localStorage.getItem(LEXICON_KEY) || ''; }
+    catch (_) { area.value = ''; }
+    const count = area.value.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !line.startsWith('#')).length;
+    setPronunciationLexiconStatus(count
+      ? `در این مرورگر ${faNumber(count)} خطِ واژه‌نامه ذخیره شده است؛ برای ویرایش، تغییرات را دوباره ذخیره کنید.`
+      : 'واژه‌نامهٔ شخصی فقط در حافظهٔ همین مرورگر می‌ماند.');
+  }
+
+  async function savePronunciationLexicon() {
+    const area = byId('speechTtsLexicon');
+    if (!area) return;
+    const raw = area.value;
+    const lines = raw.split(/\r?\n/u).map(line => line.trim()).filter(line => line && !line.startsWith('#'));
+    if (lines.length > 64) {
+      setPronunciationLexiconStatus('حداکثر ۶۴ مدخل ذخیره می‌شود؛ واژه‌های اضافی را حذف کنید.', 'error');
+      return;
+    }
+    try {
+      const core = await import('./speech-vendor/tiny-ava/core.mjs');
+      const invalid = lines.findIndex(line => core.parsePersianPronunciationLexicon(line, 1).length !== 1);
+      if (invalid >= 0) {
+        setPronunciationLexiconStatus(`قالب خط ${faNumber(invalid + 1)} معتبر نیست؛ «واژه = خوانش دلخواه» بنویسید.`, 'error');
+        return;
+      }
+      const entries = core.parsePersianPronunciationLexicon(raw, 64);
+      try {
+        if (raw.trim()) localStorage.setItem(LEXICON_KEY, raw);
+        else localStorage.removeItem(LEXICON_KEY);
+      } catch (_) {
+        setPronunciationLexiconStatus('ذخیره‌سازی محلی در این مرورگر در دسترس نیست؛ مدخل‌ها ذخیره نشدند.', 'error');
+        return;
+      }
+      setPronunciationLexiconStatus(entries.length
+        ? `${faNumber(entries.length)} مدخل روی همین دستگاه ذخیره شد؛ در خوانش بعدی اعمال می‌شود.`
+        : 'واژه‌نامهٔ خالی شد و مدخل‌های قبلی حذف شدند.', 'ready');
+    } catch (error) {
+      setPronunciationLexiconStatus('موتور محلی تلفظ برای بررسی مدخل‌ها در دسترس نیست؛ صفحه را تازه کنید.', 'error');
+      console.warn('Could not validate the local pronunciation lexicon:', error);
+    }
+  }
+
+  function clearPronunciationLexicon() {
+    const area = byId('speechTtsLexicon');
+    if (area) area.value = '';
+    try { localStorage.removeItem(LEXICON_KEY); }
+    catch (_) { /* The textarea is still cleared in this session. */ }
+    setPronunciationLexiconStatus('واژه‌نامهٔ محلی پاک شد.', 'ready');
+  }
+
   function readSpeechPreferences() {
     try {
       const value = JSON.parse(localStorage.getItem(PREF_KEY) || '{}');
@@ -1451,15 +1533,16 @@
 
   function loadSpeechPreferences() {
     const prefs = readSpeechPreferences();
+    state.voiceChoiceExplicit = prefs.voiceChoiceExplicit === true;
     const rate = byId('speechRate');
     const pitch = byId('speechPitch');
     const style = byId('speechTtsStyle');
     const expressiveness = byId('speechTtsExpressiveness');
     const pauseScale = byId('speechTtsPauseScale');
-    const availableStyles = ['formal', 'conversational', 'calm', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively'];
+    const availableStyles = ['auto', 'formal', 'conversational', 'calm', 'happy', 'sad', 'angry', 'excited', 'storytelling', 'lively'];
     if (rate && Number.isFinite(Number(prefs.rate))) rate.value = String(Math.max(.75, Math.min(1.25, Number(prefs.rate))));
     if (pitch && Number.isFinite(Number(prefs.pitch))) pitch.value = String(Math.max(.8, Math.min(1.2, Number(prefs.pitch))));
-    if (style) style.value = availableStyles.includes(prefs.style) ? prefs.style : 'conversational';
+    if (style) style.value = availableStyles.includes(prefs.style) ? prefs.style : 'auto';
     if (expressiveness && Number.isFinite(Number(prefs.expressiveness))) expressiveness.value = String(Math.max(.7, Math.min(1.4, Number(prefs.expressiveness))));
     if (pauseScale && Number.isFinite(Number(prefs.pauseScale))) pauseScale.value = String(Math.max(.6, Math.min(1.8, Number(prefs.pauseScale))));
     updateRangeLabels();
@@ -1474,9 +1557,10 @@
     const pauseScale = byId('speechTtsPauseScale');
     const prefs = {
       voiceURI: voice ? voice.value : '',
+      voiceChoiceExplicit: state.voiceChoiceExplicit === true,
       rate: rate ? Number(rate.value) : 1,
       pitch: pitch ? Number(pitch.value) : 1,
-      style: style ? style.value : 'conversational',
+      style: style ? style.value : 'auto',
       expressiveness: expressiveness ? Number(expressiveness.value) : 1.05,
       pauseScale: pauseScale ? Number(pauseScale.value) : 1
     };
@@ -1485,12 +1569,13 @@
   }
 
   function tinyAvaSynthesisSettings() {
-    const style = (byId('speechTtsStyle') || {}).value || 'conversational';
+    const style = (byId('speechTtsStyle') || {}).value || 'auto';
     const expressiveness = Number((byId('speechTtsExpressiveness') || {}).value || 1.05);
     const userPauseScale = Number((byId('speechTtsPauseScale') || {}).value || 1);
     const pitchRatio = Number((byId('speechPitch') || {}).value || 1);
     const rate = Number((byId('speechRate') || {}).value || 1);
     const presets = {
+      auto: { speed: 1, pitchShift: 0, pitchRange: 1, pauseScale: 1 },
       conversational: { speed: 1, pitchShift: 0.005, pitchRange: 1.08, pauseScale: 1 },
       formal: { speed: 0.96, pitchShift: 0, pitchRange: 0.92, pauseScale: 1.15 },
       calm: { speed: 0.92, pitchShift: -0.02, pitchRange: 0.82, pauseScale: 1.32 },
@@ -1514,7 +1599,7 @@
 
   function speechChunks(text, limit) {
     const max = limit || 260;
-    const sentences = String(text).match(/[^.!؟؛\n]+[.!؟؛]?/gu) || [String(text)];
+    const sentences = String(text).match(/[^.!?؟؛…\n]+[.!?؟؛…]?/gu) || [String(text)];
     const chunks = [];
     let current = '';
     const pushCurrent = () => { if (current.trim()) chunks.push(current.trim()); current = ''; };
@@ -1586,22 +1671,44 @@
       .trim();
   }
 
-  function speakText() {
+  async function speakText() {
     const input = byId('speechTtsInput');
     const selected = getSelectedVoice();
     if (!input || !selected) return;
     const rawText = input.value.trim();
     if (!rawText) return notify('متنی برای خواندن وارد کنید.');
-    const text = selected.type === 'tiny-ava' ? rawText : stripTinyAvaCues(rawText);
-    if (!text) return notify('پس از حذف نشانه‌های ویژه، متنی برای خواندن باقی نماند.');
 
     stopSpeech(false);
     const session = ++state.ttsSession;
     state.ttsSessionUsed = true;
+    state.ttsPreparing = true;
+    setStatus('speechTtsStatus', 'در حال آماده‌سازی واژه‌نامهٔ محلی تلفظ…', 'busy');
+    updateTtsProgress(0, 1, 'در حال تطبیق تلفظ‌های شخصی روی همین دستگاه…');
+    updateTtsControls();
+
+    let text = rawText;
+    try {
+      const core = await import('./speech-vendor/tiny-ava/core.mjs');
+      let lexiconText = '';
+      try { lexiconText = localStorage.getItem(LEXICON_KEY) || ''; }
+      catch (_) { /* No saved pronunciation mapping is also a valid state. */ }
+      const entries = core.parsePersianPronunciationLexicon(lexiconText, 64);
+      text = core.applyPersianPronunciationLexicon(rawText, entries);
+    } catch (error) {
+      console.warn('Local pronunciation dictionary could not be applied; reading the original text:', error);
+    }
+    if (session !== state.ttsSession) return;
+    state.ttsPreparing = false;
+    text = selected.type === 'tiny-ava' ? text : stripTinyAvaCues(text);
+    if (!text) {
+      setStatus('speechTtsStatus', 'پس از حذف نشانه‌های ویژه، متنی برای خواندن باقی نماند.', 'warn');
+      updateTtsControls();
+      return;
+    }
 
     if (selected.type === 'tiny-ava') {
       if (!state.tinyAvaInstalled) {
-        setStatus('speechTtsStatus', 'برای خواندن با پریسا یا مانا، ابتدا مدل مشترک tiny-ava را دریافت کنید.', 'idle');
+        setStatus('speechTtsStatus', 'برای خواندن روان‌تر با پریسا یا مانا، ابتدا مدل عصبی tiny-ava را دریافت کنید.', 'idle');
         updateTinyAvaDownloadControls();
         updateTtsControls();
         return;

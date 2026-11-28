@@ -1,4 +1,4 @@
-const CACHE = 'shahr-advisor-pc-v40';
+const CACHE = 'shahr-advisor-pc-v42';
 const APP_CACHE_PREFIX = 'shahr-advisor-pc-';
 const APP_SHELL = [
   './',
@@ -13,6 +13,9 @@ const APP_SHELL = [
   './speech-tool.js',
   './local-chat.css',
   './local-chat.js',
+  './debt-collection.css',
+  './debt-collection.js',
+  './debt-collection-core.mjs',
   './local-llm/web-llm.mjs',
   './local-llm/web-llm-worker.mjs',
   './local-llm/README.md',

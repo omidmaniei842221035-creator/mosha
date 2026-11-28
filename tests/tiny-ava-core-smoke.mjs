@@ -5,8 +5,10 @@ import {
   TINY_AVA_TOTAL_BYTES,
   TINY_AVA_VERSION,
   TINY_AVA_VOICES,
+  applyPersianPronunciationLexicon,
   byteT5Encode,
   expandPersianNumbers,
+  parsePersianPronunciationLexicon,
   normalizeTinyAvaText,
   splitTinyAvaSentences,
   segmentTinyAvaText,
@@ -34,17 +36,34 @@ assert.equal(expandPersianNumbers('۸۵٪'), 'هشتاد و پنج درصد');
 assert.equal(expandPersianNumbers('3-5'), 'سه تا پنج');
 assert.equal(expandPersianNumbers('2026-11-26'), 'دو هزار و بیست و شش، یازده، بیست و شش');
 assert.equal(expandPersianNumbers('A12B'), 'A12B');
+const lexicon = parsePersianPronunciationLexicon('# واژه‌های محلی\nكاظمی = کاظِمی\nبانک شهر → بانْکِ شهر\nبانک شهر => بانکِ شهر');
+assert.equal(lexicon.length, 2, 'duplicate entries use the last saved pronunciation');
+assert.equal(lexicon[0].source, 'بانک شهر', 'longer phrases are tried before single words');
+assert.equal(lexicon[0].spoken, 'بانکِ شهر');
+assert.equal(applyPersianPronunciationLexicon('بانک شهر، آقای كاظمی و بانک‌شهر [[آه]]', lexicon), 'بانکِ شهر، آقای کاظِمی و بانک‌شهر [[آه]]');
+assert.equal(applyPersianPronunciationLexicon('کاظمی [[آه]] کاظمی', lexicon), 'کاظِمی [[آه]] کاظِمی', 'lexicon never rewrites cue markup and resumes after it');
+assert.equal(applyPersianPronunciationLexicon('سطر یک\n\nکاظمی', lexicon), 'سطر یک\n\nکاظِمی', 'paragraph breaks remain available to the prosody segmenter');
+assert.equal(applyPersianPronunciationLexicon('بانک شهری', lexicon), 'بانک شهری', 'lexicon matches whole words/phrases only');
 
 assert.deepEqual(
   splitTinyAvaSentences('سلام. آیا ساعت ۱۰:۳۰ آماده‌ای؟'),
   ['سلام.', 'آیا ساعت ده و سی دقیقه آماده‌ای?']
 );
 const timedSegments = segmentTinyAvaText('سلام، حال شما چطور است؟');
-assert.deepEqual(timedSegments.map(segment => segment.text), ['سلام,', 'حال شما چطور است?']);
-assert.equal(timedSegments[0].pauseAfterMs, 135);
-assert.equal(timedSegments[1].pauseAfterMs, 390);
+assert.deepEqual(timedSegments.map(segment => segment.text), ['سلام, حال شما چطور است?']);
+assert.equal(timedSegments[0].pauseAfterMs, 390);
+assert.ok(timedSegments[0].pitchShiftOffset > 0, 'questions receive a restrained, sentence-level intonation cue');
+const excitedSegments = segmentTinyAvaText('چه خبر خوبی!');
+assert.ok(excitedSegments[0].pitchRangeScale > 1 && excitedSegments[0].speedScale > 1);
+const ellipsisSegments = segmentTinyAvaText('شاید…');
+assert.ok(ellipsisSegments[0].speedScale < 1 && ellipsisSegments[0].pitchShiftOffset < 0);
+const warmSegments = segmentTinyAvaText('از شما ممنونم.');
+assert.ok(warmSegments[0].pitchRangeScale > 1);
+const gentleSegments = segmentTinyAvaText('متأسفم که چنین شد.');
+assert.ok(gentleSegments[0].speedScale < 1 && gentleSegments[0].pitchShiftOffset < 0);
 const lineSegments = segmentTinyAvaText('خط یک\nخط دو\n\nبند سه.');
-assert.deepEqual(lineSegments.map(segment => segment.pauseAfterMs), [245, 610, 330]);
+assert.deepEqual(lineSegments.map(segment => segment.text), ['خط یک خط دو', 'بند سه.']);
+assert.deepEqual(lineSegments.map(segment => segment.pauseAfterMs), [610, 330]);
 assert.equal(segmentTinyAvaText('[[مکث کوتاه]]سلام.')[0].pauseBeforeMs, 190);
 const boundedSegments = segmentTinyAvaText('واژه '.repeat(200), 48);
 const unspacedBoundedSegments = segmentTinyAvaText('x'.repeat(500), 48);

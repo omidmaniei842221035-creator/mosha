@@ -12,7 +12,7 @@ The two voices use the same **36,034,045-byte TTS model plus two G2P files** (44
 ## Local inference
 
 - `tiny-ava-worker.mjs` loads all three ONNX sessions through the already-bundled ONNX Runtime Web and WebAssembly runtime. Model bytes are read only from this origin's IndexedDB; there is no CDN/runtime/API fallback.
-- `core.mjs` contains the pinned asset metadata, Persian normalization, Persian-number expansion, ByT5 G2P decoder, phoneme mapping, and `segmentTinyAvaText`, which turns punctuation/newlines and optional inline cues into bounded speech segments and silence timings.
+- `core.mjs` contains the pinned asset metadata, Persian normalization, Persian-number expansion, ByT5 G2P decoder, phoneme mapping, sentence-level `segmentTinyAvaText`, and an optional same-device pronunciation lexicon. Commas and internal punctuation stay inside one model inference so words do not get split into separately synthesized fragments; sentence endings and blank paragraphs create bounded pauses.
 - `store.mjs` keeps the model bundle in its own IndexedDB database (`shahr-advisor-local-tiny-ava`), separate from Piper voices.
 - The three model files are downloaded from immutable Hugging Face revisions, size-checked and SHA-256-checked before the complete bundle is stored.
 - TTS output is 24 kHz mono WAV. The worker limits CPU inference to one WASM thread to avoid blocking the app.
@@ -21,9 +21,11 @@ The two voices use the same **36,034,045-byte TTS model plus two G2P files** (44
 
 Persian G2P is the primary path. The input keeps Persian vowel marks so users may disambiguate words with diacritics; numeric sequences, common clock times, percentages and numeric ranges are expanded into Persian words before G2P because the model's text frontend does not speak raw digits reliably. This is a practical aid, not a guarantee of perfect pronunciation. Words with ambiguous spelling, rare names and mixed English/Persian may still need user-supplied diacritics or a written-out form.
 
-The default **conversational** style plus formal, calm, happy, sad, angry, excited, storytelling, and lively presets only map to the model's available speed, pitch shift/range, and pause timing. They are approximate performance effects, **not trained emotion labels, context-aware emotion detection, new accents, or a guarantee of human-like affect**. Nothing is added to the user's words automatically.
+The default **automatic, sentence-aware** style applies small pitch/speed changes for question, exclamation, and trailing-ellipsis endings, plus a few conservative lexical cues for thanks/congratulations or sympathy; commas remain part of the same inference. Formal, calm, happy, sad, angry, excited, storytelling, and lively presets map to the model's available speed, pitch shift/range, and pause timing. These are approximate performance effects, **not trained emotion labels, context-aware emotion detection, new accents, or a guarantee of human-like affect**. Nothing is added to the user's words automatically.
 
-Punctuation and line breaks are converted to short local silence gaps (for example, a comma is shorter than a question mark; a blank line is longer). Tiny-ava users may also put these optional cues directly in the text:
+The optional pronunciation lexicon stores up to 64 user-supplied `word = preferred reading` entries in this browser's local storage and applies whole-word/phrase substitutions before synthesis. Diacritics in the preferred reading can guide the Persian G2P frontend. This adapts spelling/pronunciation, **not the neural model weights or voice**; entries do not leave the device.
+
+Sentence-ending punctuation and blank paragraphs create bounded local silence gaps; commas and other intra-sentence punctuation stay in the same model input so the frontend can preserve phrase continuity. A single line break is treated as spacing, while a blank line creates a longer paragraph pause. Tiny-ava users may also put these optional cues directly in the text:
 
 - `[[مکث کوتاه]]`, `[[مکث]]`, and `[[مکث بلند]]` add progressively longer silence.
 - `[[کشیده:عبارت]]` sends the phrase at a slower model speed and a slightly wider pitch range. This is an approximation, not true phoneme-level vowel stretching.
